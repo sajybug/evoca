@@ -1,7 +1,6 @@
 frontend/node_modules/
 frontend/dist/
-frontend/wailsjs/go/
-frontend/wailsjs/go/models.ts
+frontend/src/wailsjs/
 build/bin/
 *.db
 *.db-shm
