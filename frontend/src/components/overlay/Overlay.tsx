@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Configuration } from "../../types/domain";
+import type { Configuration, Provider } from "../../types/domain";
 import { useOverlayStore } from "../../stores/overlayStore";
 import { evoca } from "../../services/evoca";
 import { EventsOn } from "../../wailsjs/runtime/runtime";
@@ -12,24 +12,40 @@ export function Overlay({
   configurations,
   onOpenSettings,
   onOpenHistory,
+  providers,
 }: {
   configurations: Configuration[];
   onOpenSettings: () => void;
   onOpenHistory: () => void;
+  providers: Provider[];
 }) {
   const state = useOverlayStore();
   const [query, setQuery] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [loadingStartedAt, setLoadingStartedAt] = useState<number | null>(null);
+  const [loadingElapsedMs, setLoadingElapsedMs] = useState(0);
   const [screenshotMode, setScreenshotMode] = useState(false);
   const [screenshotImage, setScreenshotImage] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
   const dragStart = useRef<Point | null>(null);
+  const streamCleanup = useRef<(() => void) | null>(null);
   const filtered = useMemo(
     () => configurations.filter((x) => `${x.name} ${x.description ?? ""}`.toLowerCase().includes(query.toLowerCase())),
     [configurations, query]
   );
   const selected = configurations.find((x) => x.id === state.selected);
+
+  useEffect(() => {
+    if (!loadingStartedAt || !streaming) {
+      setLoadingElapsedMs(0);
+      return;
+    }
+    const tick = () => setLoadingElapsedMs(Date.now() - loadingStartedAt);
+    tick();
+    const timer = window.setInterval(tick, 250);
+    return () => window.clearInterval(timer);
+  }, [loadingStartedAt, streaming]);
 
   useEffect(() => {
     const onEscape = (event: KeyboardEvent) => {
@@ -55,41 +71,58 @@ export function Overlay({
   function listenToStream(requestId: string) {
     const offChunk = EventsOn("evoca:llm:chunk", (event: { id: string; chunk: string }) => {
       if (event?.id === requestId) {
-        const current = useOverlayStore.getState().output;
-        useOverlayStore.getState().setOutput(current + (event.chunk || ""));
+        useOverlayStore.getState().appendOutput(event.chunk || "");
         useOverlayStore.getState().setState("loading");
       }
     });
     const offDone = EventsOn("evoca:llm:done", (event: { id: string; output: string }) => {
       if (event?.id === requestId) {
         setStreaming(false);
+        setLoadingStartedAt(null);
         state.setOutput(event.output || useOverlayStore.getState().output);
         offChunk(); offDone(); offError();
+        if (streamCleanup.current) streamCleanup.current = null;
       }
     });
     const offError = EventsOn("evoca:llm:error", (event: { id: string; error: string }) => {
       if (event?.id === requestId) {
         setStreaming(false);
+        setLoadingStartedAt(null);
         state.setError(event.error || "LLM request failed");
         offChunk(); offDone(); offError();
+        if (streamCleanup.current) streamCleanup.current = null;
       }
     });
-    return () => { offChunk(); offDone(); offError(); };
+    const cleanup = () => { offChunk(); offDone(); offError(); };
+    streamCleanup.current = cleanup;
+    return cleanup;
   }
 
   async function run() {
     if (!selected || !state.input.trim() || streaming) return;
+    streamCleanup.current?.();
+    streamCleanup.current = null;
     setStreaming(true);
-    state.setState("loading");
+    setLoadingStartedAt(Date.now());
     state.setOutput("");
+    state.setState("loading");
     const requestId = crypto.randomUUID();
     listenToStream(requestId);
     try {
       await evoca.startConfigurationStream(selected.id, state.input, requestId);
     } catch (error) {
       setStreaming(false);
+      setLoadingStartedAt(null);
       state.setError(String(error));
     }
+  }
+
+  function backToConfigurations() {
+    streamCleanup.current?.();
+    streamCleanup.current = null;
+    setStreaming(false);
+    setLoadingStartedAt(null);
+    state.backToSearch();
   }
 
   async function beginScreenshot() {
@@ -160,9 +193,12 @@ export function Overlay({
     setScreenshotPreview(null);
     setScreenshotImage(null);
     setSelection(null);
+    streamCleanup.current?.();
+    streamCleanup.current = null;
     setStreaming(true);
-    state.setState("loading");
+    setLoadingStartedAt(Date.now());
     state.setOutput("");
+    state.setState("loading");
     const requestId = crypto.randomUUID();
     listenToStream(requestId);
     try {
@@ -179,6 +215,7 @@ export function Overlay({
       );
     } catch (error) {
       setStreaming(false);
+      setLoadingStartedAt(null);
       state.setError(String(error));
     }
   }
@@ -244,7 +281,7 @@ export function Overlay({
           {filtered.map((item) => (
             <button className="row" key={item.id} onClick={() => state.select(item.id)}>
               <span className="glyph">{item.icon || "✦"}</span>
-              <span><b>{item.name}</b><small>{item.description}</small></span>
+              <span><b>{item.name}</b><small>{item.description}</small><small className="configuration-meta">{providers.find((p) => p.id === item.providerId)?.name || "No provider"} · {item.model || "No model"}</small></span>
             </button>
           ))}
         </div>
@@ -253,20 +290,35 @@ export function Overlay({
     );
   }
 
-  if (state.state === "loading" && state.output) {
+  if (state.state === "loading") {
+    const elapsedSeconds = Math.floor(loadingElapsedMs / 1000);
+    const thinkingLabel = elapsedSeconds >= 8 ? "Still thinking…" : "Thinking…";
     return (
       <section className="panel">
-        <div className="title window-drag-handle">{selected?.name} · Generating…</div>
-        <div className="result"><Markdown source={state.output} /><span className="stream-cursor">▌</span></div>
-        <footer><span>Live stream</span><button onClick={() => navigator.clipboard.writeText(state.output)}>Copy</button></footer>
+        <div className="title window-drag-handle"><button className="back-button" onClick={backToConfigurations}>← Back</button><span>{selected?.name} · Generating…</span></div>
+        {state.output ? (
+          <>
+            <div className="result"><Markdown source={state.output} /><span className="stream-cursor">▌</span></div>
+            <div className="llm-loading-inline" role="status" aria-live="polite">
+              <span className="loading-dots"><i></i><i></i><i></i></span>
+              <span>Generating…</span>
+            </div>
+          </>
+        ) : (
+          <div className="llm-thinking" role="status" aria-live="polite">
+            <span className="thinking-orb" aria-hidden="true"></span>
+            <span>{thinkingLabel}</span>
+            <span className="thinking-time">{elapsedSeconds}s</span>
+          </div>
+        )}
       </section>
     );
   }
 
-  if (state.state === "input" || state.state === "loading") {
+  if (state.state === "input") {
     return (
       <section className="panel">
-        <div className="title window-drag-handle">{selected?.name}</div>
+        <div className="title window-drag-handle"><button className="back-button" onClick={backToConfigurations}>← Back</button><span>{selected?.name}</span></div>
         <textarea
           autoFocus
           disabled={streaming}
@@ -276,7 +328,7 @@ export function Overlay({
           onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") void run(); }}
         />
         <footer>
-          <span>{state.state === "loading" ? "Generating…" : "Ctrl+Enter to run"}</span>
+          <span>Ctrl+Enter to run</span>
           <button disabled={streaming} onClick={() => void beginScreenshot()}>Screenshot</button>
           <button className="primary" disabled={streaming} onClick={() => void run()}>Run</button>
         </footer>
@@ -287,7 +339,7 @@ export function Overlay({
   if (state.state === "output") {
     return (
       <section className="panel">
-        <div className="title window-drag-handle">Result</div>
+        <div className="title window-drag-handle"><button className="back-button" onClick={backToConfigurations}>← Back</button><span>Result</span></div>
         <div className="result"><Markdown source={state.output} /></div>
         <footer>
           <button onClick={() => navigator.clipboard.writeText(state.output)}>Copy</button>

@@ -269,6 +269,33 @@ func (a *App) DeleteProvider(id string) error {
 	return a.database.DeleteProvider(id)
 }
 
+func (a *App) TestProvider(provider db.Provider) error {
+    if a.providers == nil {
+        return fmt.Errorf("provider registry is not initialized")
+    }
+    return llm.TestProvider(provider)
+}
+
+func (a *App) DiscoverProviderModels(provider db.Provider) ([]db.ProviderModel, error) {
+    if a.providers == nil {
+        return nil, fmt.Errorf("provider registry is not initialized")
+    }
+    discovered, err := llm.DiscoverModels(provider)
+    if err != nil {
+        return nil, err
+    }
+    models := make([]db.ProviderModel, 0, len(discovered))
+    for _, model := range discovered {
+        models = append(models, db.ProviderModel{
+            ID: fmt.Sprintf("%s:%s", provider.ID, model.Name),
+            ProviderID: provider.ID,
+            Name: model.Name,
+            DisplayName: model.DisplayName,
+        })
+    }
+    return models, nil
+}
+
 func (a *App) GetProviderModels(providerID string) ([]db.ProviderModel, error) {
 	if a.database == nil {
 		return nil, fmt.Errorf("database is not initialized")

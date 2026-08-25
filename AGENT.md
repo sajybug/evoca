@@ -306,6 +306,17 @@ Only record durable architectural/product changes here. Do not append repetitive
 - Prevents the terminal from appearing over the desktop during capture and from being included in the captured image.
 - Screenshot selection / preview / confirm flow remains unchanged.
 
+### Phase 8 — Configuration details, provider discovery & LLM loading
+
+- Configuration list now shows the Provider and Model alongside the configuration name and description.
+- Configuration editing has an explicit Back action to return to the configuration list.
+- Provider setup supports Test provider, Discover models, and adding discovered models for supported provider types.
+- LLM execution now keeps an explicit loading state from Run until the stream completes, including an animated indicator while waiting for the first token and while chunks are arriving.
+- The execution/input/result views include an explicit Back action so the user can return to the configuration list without closing eVoca.
+- While an LLM request is running, the input controls and Run/Screenshot actions are replaced by one dedicated loading view so the UI does not appear split into a loading area plus an active Run footer.
+- Loading behavior is reasoning-friendly: before visible output arrives, the UI uses a compact “Thinking…” state with elapsed seconds instead of a large indefinite spinner, then switches to live streamed output as soon as visible content arrives.
+- Back actions use a white label.
+
 ---
 
 ## Current Roadmap
@@ -320,6 +331,7 @@ Phase 4 -> History reliability, hotkey guard & configurable storage -> Done
 Phase 5 -> History execution model persistence fix -> Done
 Phase 6 -> Hotkey Escape fix & draggable frameless window -> Done
 Phase 7 -> Hidden screenshot capture process -> Done
+Phase 8 -> Configuration details, provider discovery & LLM loading -> Done
 ```
 
 The exact next Phase may change; when it does, update the roadmap rather than keeping contradictory plans.

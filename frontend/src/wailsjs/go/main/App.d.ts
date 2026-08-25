@@ -12,6 +12,8 @@ export function DeleteProvider(arg1:string):Promise<void>;
 
 export function DeleteProviderModel(arg1:string):Promise<void>;
 
+export function DiscoverProviderModels(arg1:db.Provider):Promise<Array<db.ProviderModel>>;
+
 export function GetConfiguration(arg1:string):Promise<db.Configuration>;
 
 export function GetConfigurations():Promise<Array<db.Configuration>>;
@@ -49,5 +51,7 @@ export function SetStorageSettings(arg1:db.StorageSettings):Promise<void>;
 export function StartConfigurationStream(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function StartScreenshotStream(arg1:string,arg2:string,arg3:string,arg4:number,arg5:number,arg6:number,arg7:number,arg8:number,arg9:number):Promise<void>;
+
+export function TestProvider(arg1:db.Provider):Promise<void>;
 
 export function ToggleOverlay():Promise<void>;

@@ -43,6 +43,9 @@ export function Settings({ configurations, onChange, onClose }: Props) {
   const [configuration, setConfiguration] = useState<Configuration | null>(configurations[0] ?? null);
   const [provider, setProvider] = useState<Provider | null>(null);
   const [models, setModels] = useState<ProviderModel[]>([]);
+  const [discoveredModels, setDiscoveredModels] = useState<ProviderModel[]>([]);
+  const [providerTesting, setProviderTesting] = useState(false);
+  const [discoveringModels, setDiscoveringModels] = useState(false);
   const [configurationModels, setConfigurationModels] = useState<ProviderModel[]>([]);
   const [modelName, setModelName] = useState("");
   const [modelLabel, setModelLabel] = useState("");
@@ -125,6 +128,7 @@ export function Settings({ configurations, onChange, onClose }: Props) {
     setMessage("");
     setProvider(next);
     setModels([]);
+    setDiscoveredModels([]);
     setModelName("");
     setModelLabel("");
     setSection("providers");
@@ -155,6 +159,55 @@ export function Settings({ configurations, onChange, onClose }: Props) {
       setMessage(`Save provider failed: ${String(error)}`);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function testProvider() {
+    if (!provider) return;
+    setProviderTesting(true);
+    setMessage("");
+    try {
+      await evoca.testProvider(provider);
+      setMessage("Provider connection successful.");
+    } catch (error) {
+      setMessage(`Provider test failed: ${String(error)}`);
+    } finally {
+      setProviderTesting(false);
+    }
+  }
+
+  async function discoverModels() {
+    if (!provider) return;
+    setDiscoveringModels(true);
+    setMessage("");
+    try {
+      const next = await evoca.discoverProviderModels(provider);
+      setDiscoveredModels(Array.isArray(next) ? next : []);
+      setMessage(`${next.length} model${next.length === 1 ? "" : "s"} found.`);
+    } catch (error) {
+      setDiscoveredModels([]);
+      setMessage(`Model discovery failed: ${String(error)}`);
+    } finally {
+      setDiscoveringModels(false);
+    }
+  }
+
+  async function addDiscoveredModel(model: ProviderModel) {
+    if (!provider) return;
+    try {
+      if (!providers.some((item) => item.id === provider.id)) {
+        await evoca.saveProvider(provider);
+        const nextProviders = await evoca.getProviders();
+        setProviders(nextProviders);
+        setProvider(nextProviders.find((item) => item.id === provider.id) ?? provider);
+      }
+      await evoca.saveProviderModel(model);
+      const nextModels = await evoca.getProviderModels(provider.id);
+      setModels(Array.isArray(nextModels) ? nextModels : []);
+      setDiscoveredModels((current) => current.filter((item) => item.name !== model.name));
+      setMessage(`Model "${model.name}" added.`);
+    } catch (error) {
+      setMessage(`Add model failed: ${String(error)}`);
     }
   }
 
@@ -350,7 +403,8 @@ export function Settings({ configurations, onChange, onClose }: Props) {
                 className={configuration?.id === s.id ? "side-row active" : "side-row"}
                 onClick={() => setConfiguration(s)}
               >
-                ✦ {s.name}
+                <span className="side-row-title">✦ {s.name}</span>
+                <small>{providers.find((p) => p.id === s.providerId)?.name || "No provider"} · {s.model || "No model"}</small>
               </button>
             ))}
           </aside>
@@ -358,6 +412,9 @@ export function Settings({ configurations, onChange, onClose }: Props) {
           <div className="editor">
             {configuration ? (
               <>
+                <div className="editor-heading">
+                  <h3>Configuration</h3>
+                </div>
                 <label>Name<input value={configuration.name} onChange={e => setConfiguration({...configuration,name:e.target.value})}/></label>
                 <label>Description<input value={configuration.description ?? ""} onChange={e => setConfiguration({...configuration,description:e.target.value})}/></label>
 
@@ -429,6 +486,7 @@ export function Settings({ configurations, onChange, onClose }: Props) {
                 className={provider?.id === r.id ? "side-row active" : "side-row"}
                 onClick={() => {
                   setProvider(r);
+                  setDiscoveredModels([]);
                   setSection("providers");
                   setMessage("");
                 }}
@@ -444,6 +502,15 @@ export function Settings({ configurations, onChange, onClose }: Props) {
                 <div className="editor-heading">
                   <h3>{provider.name}</h3>
                   <span>{providers.some((item) => item.id === provider.id) ? "Saved" : "New"}</span>
+                </div>
+
+                <div className="provider-actions">
+                  <button type="button" className="secondary" disabled={providerTesting} onClick={() => void testProvider()}>
+                    {providerTesting ? "Testing…" : "Test provider"}
+                  </button>
+                  <button type="button" className="secondary" disabled={discoveringModels} onClick={() => void discoverModels()}>
+                    {discoveringModels ? "Loading models…" : "Discover models"}
+                  </button>
                 </div>
 
                 <label>Provider name<input value={provider.name} onChange={e => setProvider({...provider,name:e.target.value})}/></label>
@@ -481,6 +548,21 @@ export function Settings({ configurations, onChange, onClose }: Props) {
                       </div>
                     ))}
                   </div>
+
+                  {discoveredModels.length > 0 && (
+                    <div className="discovered-models">
+                      <div className="section-title">Available from provider</div>
+                      <div className="model-list">
+                        {discoveredModels.map(m => (
+                          <div className="model-row" key={m.id}>
+                            <span>{m.displayName?.trim() || m.name}</span>
+                            <code>{m.name}</code>
+                            <button type="button" className="text-button" onClick={() => void addDiscoveredModel(m)}>Add</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="footer">

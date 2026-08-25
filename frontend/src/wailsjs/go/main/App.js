@@ -22,6 +22,10 @@ export function DeleteProviderModel(arg1) {
   return window['go']['main']['App']['DeleteProviderModel'](arg1);
 }
 
+export function DiscoverProviderModels(arg1) {
+  return window['go']['main']['App']['DiscoverProviderModels'](arg1);
+}
+
 export function GetConfiguration(arg1) {
   return window['go']['main']['App']['GetConfiguration'](arg1);
 }
@@ -96,6 +100,10 @@ export function StartConfigurationStream(arg1, arg2, arg3) {
 
 export function StartScreenshotStream(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9) {
   return window['go']['main']['App']['StartScreenshotStream'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
+}
+
+export function TestProvider(arg1) {
+  return window['go']['main']['App']['TestProvider'](arg1);
 }
 
 export function ToggleOverlay() {

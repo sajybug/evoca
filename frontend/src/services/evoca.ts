@@ -12,6 +12,8 @@ import {
   GetProviderModels,
   SaveProviderModel,
   DeleteProviderModel,
+  TestProvider,
+  DiscoverProviderModels,
   GetStorageSettings,
   SetStorageSettings,
   GetHotkey,
@@ -53,6 +55,14 @@ export const evoca = {
 
   deleteProviderModel(id: string): Promise<void> {
     return DeleteProviderModel(id);
+  },
+
+  testProvider(provider: Provider): Promise<void> {
+    return TestProvider(provider);
+  },
+
+  discoverProviderModels(provider: Provider): Promise<ProviderModel[]> {
+    return DiscoverProviderModels(provider);
   },
 
   invokeConfiguration(id: string, input: string): Promise<string> {
