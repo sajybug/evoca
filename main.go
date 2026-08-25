@@ -16,8 +16,8 @@ func main() {
 	app := NewApp()
 	err := wails.Run(&options.App{
 		Title:                    "eVoca",
-		Width:                    720,
-		Height:                   480,
+		Width:                    900,
+		Height:                   500,
 		MinWidth:                 640,
 		MinHeight:                360,
 		StartHidden:              true,

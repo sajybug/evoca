@@ -11,9 +11,11 @@ type Selection = { x: number; y: number; width: number; height: number };
 export function Overlay({
   configurations,
   onOpenSettings,
+  onOpenHistory,
 }: {
   configurations: Configuration[];
   onOpenSettings: () => void;
+  onOpenHistory: () => void;
 }) {
   const state = useOverlayStore();
   const [query, setQuery] = useState("");
@@ -30,7 +32,8 @@ export function Overlay({
   const selected = configurations.find((x) => x.id === state.selected);
 
   useEffect(() => {
-    const onEscape = () => {
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
       if (screenshotMode || screenshotPreview) {
         setScreenshotMode(false);
         setScreenshotPreview(null);
@@ -232,9 +235,9 @@ export function Overlay({
   if (state.state === "searching") {
     return (
       <section className="panel">
-        <div className="brand">
+        <div className="brand window-drag-handle">
           <div><span className="brand-mark">✦</span><b>eVoca</b></div>
-          <button onClick={onOpenSettings}>Settings</button>
+          <div className="brand-actions"><button onClick={onOpenHistory}>History</button><button onClick={onOpenSettings}>Settings</button></div>
         </div>
         <input autoFocus placeholder="Search configurations..." value={query} onChange={(e) => setQuery(e.target.value)} />
         <div className="list">
@@ -253,7 +256,7 @@ export function Overlay({
   if (state.state === "loading" && state.output) {
     return (
       <section className="panel">
-        <div className="title">{selected?.name} · Generating…</div>
+        <div className="title window-drag-handle">{selected?.name} · Generating…</div>
         <div className="result"><Markdown source={state.output} /><span className="stream-cursor">▌</span></div>
         <footer><span>Live stream</span><button onClick={() => navigator.clipboard.writeText(state.output)}>Copy</button></footer>
       </section>
@@ -263,7 +266,7 @@ export function Overlay({
   if (state.state === "input" || state.state === "loading") {
     return (
       <section className="panel">
-        <div className="title">{selected?.name}</div>
+        <div className="title window-drag-handle">{selected?.name}</div>
         <textarea
           autoFocus
           disabled={streaming}
@@ -284,7 +287,7 @@ export function Overlay({
   if (state.state === "output") {
     return (
       <section className="panel">
-        <div className="title">Result</div>
+        <div className="title window-drag-handle">Result</div>
         <div className="result"><Markdown source={state.output} /></div>
         <footer>
           <button onClick={() => navigator.clipboard.writeText(state.output)}>Copy</button>

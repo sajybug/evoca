@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Provider, ProviderModel, Configuration } from "../../types/domain";
+import type { Provider, ProviderModel, Configuration, StorageSettings } from "../../types/domain";
 import { evoca } from "../../services/evoca";
 
 interface Props {
@@ -49,9 +49,12 @@ export function Settings({ configurations, onChange, onClose }: Props) {
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [hotkey, setHotkey] = useState("Ctrl+Space");
+  const [storage, setStorage] = useState<StorageSettings | null>(null);
+  const [storageSaving, setStorageSaving] = useState(false);
 
   useEffect(() => {
     evoca.getHotkey().then((value) => setHotkey(value || "Ctrl+Space")).catch(() => setHotkey("Ctrl+Space"));
+    evoca.getStorageSettings().then(setStorage).catch((error) => setMessage(String(error)));
   }, []);
 
   useEffect(() => {
@@ -258,7 +261,7 @@ export function Settings({ configurations, onChange, onClose }: Props) {
 
   return (
     <section className="panel settings-panel">
-      <div className="brand-row">
+      <div className="brand-row window-drag-handle">
         <div><span className="brand-mark">✦</span> Settings</div>
         <div className="settings-actions">
           <button type="button" className="text-button" onClick={onClose}>Close</button>
@@ -306,6 +309,32 @@ export function Settings({ configurations, onChange, onClose }: Props) {
               </select>
             </label>
             <div className="status-message">Current: <code>{hotkey}</code></div>
+            <div className="editor-heading storage-heading">
+              <h3>Data storage</h3>
+              <span>Database & screenshot files</span>
+            </div>
+            <p className="muted">Choose where eVoca keeps its SQLite database and captured chat images. A restart is required after changing these paths so the application can reopen the database at the new location.</p>
+            {storage && (
+              <>
+                <label>Database path
+                  <input value={storage.databasePath} onChange={(e) => setStorage({ ...storage, databasePath: e.target.value })} />
+                </label>
+                <label>Chat images path
+                  <input value={storage.imagesPath} onChange={(e) => setStorage({ ...storage, imagesPath: e.target.value })} />
+                </label>
+                <button type="button" disabled={storageSaving} onClick={async () => {
+                  setStorageSaving(true);
+                  try {
+                    await evoca.setStorageSettings(storage);
+                    setMessage("Storage paths saved. Restart eVoca to apply the new database path.");
+                  } catch (error) {
+                    setMessage(`Storage settings failed: ${String(error)}`);
+                  } finally {
+                    setStorageSaving(false);
+                  }
+                }}>{storageSaving ? "Saving…" : "Save storage paths"}</button>
+              </>
+            )}
           </div>
         </div>
       ) : section === "configurations" ? (

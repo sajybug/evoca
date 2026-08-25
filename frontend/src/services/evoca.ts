@@ -12,15 +12,19 @@ import {
   GetProviderModels,
   SaveProviderModel,
   DeleteProviderModel,
+  GetStorageSettings,
+  SetStorageSettings,
   GetHotkey,
   SetHotkey,
   BeginScreenshot,
   PreviewScreenshot,
   CancelScreenshot,
   StartScreenshotStream,
+  ListExecutions,
+  GetExecution,
 } from "../wailsjs/go/main/App";
 
-import type { Configuration, Provider, ProviderModel } from "../types/domain";
+import type { Configuration, Provider, ProviderModel, Execution, ExecutionPage, StorageSettings } from "../types/domain";
 
 export const evoca = {
   getConfigurations(): Promise<Configuration[]> {
@@ -63,6 +67,14 @@ export const evoca = {
     return HideOverlay();
   },
 
+  getStorageSettings(): Promise<StorageSettings> {
+    return GetStorageSettings();
+  },
+
+  setStorageSettings(settings: StorageSettings): Promise<void> {
+    return SetStorageSettings(settings);
+  },
+
   getHotkey(): Promise<string> {
     return GetHotkey();
   },
@@ -85,6 +97,14 @@ export const evoca = {
 
   startScreenshotStream(id: string, input: string, requestId: string, x: number, y: number, width: number, height: number, viewportWidth: number, viewportHeight: number): Promise<void> {
     return StartScreenshotStream(id, input, requestId, x, y, width, height, viewportWidth, viewportHeight);
+  },
+
+  listExecutions(page: number, pageSize: number, search: string, status: string, requestType: string, configurationId: string): Promise<ExecutionPage> {
+    return ListExecutions(page, pageSize, search, status, requestType, configurationId);
+  },
+
+  getExecution(id: string): Promise<Execution> {
+    return GetExecution(id);
   },
 
   quit(): Promise<void> {

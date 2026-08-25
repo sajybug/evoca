@@ -30,6 +30,10 @@ export function GetConfigurations() {
   return window['go']['main']['App']['GetConfigurations']();
 }
 
+export function GetExecution(arg1) {
+  return window['go']['main']['App']['GetExecution'](arg1);
+}
+
 export function GetHotkey() {
   return window['go']['main']['App']['GetHotkey']();
 }
@@ -42,12 +46,20 @@ export function GetProviders() {
   return window['go']['main']['App']['GetProviders']();
 }
 
+export function GetStorageSettings() {
+  return window['go']['main']['App']['GetStorageSettings']();
+}
+
 export function HideOverlay() {
   return window['go']['main']['App']['HideOverlay']();
 }
 
 export function InvokeConfiguration(arg1, arg2) {
   return window['go']['main']['App']['InvokeConfiguration'](arg1, arg2);
+}
+
+export function ListExecutions(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['ListExecutions'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function PreviewScreenshot(arg1, arg2, arg3, arg4, arg5, arg6) {
@@ -72,6 +84,10 @@ export function SaveProviderModel(arg1) {
 
 export function SetHotkey(arg1) {
   return window['go']['main']['App']['SetHotkey'](arg1);
+}
+
+export function SetStorageSettings(arg1) {
+  return window['go']['main']['App']['SetStorageSettings'](arg1);
 }
 
 export function StartConfigurationStream(arg1, arg2, arg3) {

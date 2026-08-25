@@ -9,13 +9,15 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/evoca-dev/evoca/backend/db"
 )
 
 type ChunkFunc func(string) error
 
-func streamOllama(provider db.Provider, req Request, onChunk ChunkFunc) (string, error) {
+func streamOllama(provider db.Provider, req Request, onChunk ChunkFunc) (StreamResult, error) {
+	started := time.Now()
 	base := strings.TrimRight(provider.BaseURL, "/")
 	if base == "" {
 		base = "http://localhost:11434"
@@ -28,19 +30,21 @@ func streamOllama(provider db.Provider, req Request, onChunk ChunkFunc) (string,
 	payload, _ := json.Marshal(body)
 	hreq, err := http.NewRequest(http.MethodPost, base+"/api/chat", bytes.NewReader(payload))
 	if err != nil {
-		return "", err
+		return StreamResult{}, err
 	}
 	hreq.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(hreq)
 	if err != nil {
-		return "", err
+		return StreamResult{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return "", fmt.Errorf("ollama returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+		return StreamResult{}, fmt.Errorf("ollama returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
 	}
 	var full strings.Builder
+	firstTokenMs := int64(0)
+	metrics := Metrics{}
 	sc := bufio.NewScanner(resp.Body)
 	sc.Buffer(make([]byte, 4096), 4*1024*1024)
 	for sc.Scan() {
@@ -48,25 +52,50 @@ func streamOllama(provider db.Provider, req Request, onChunk ChunkFunc) (string,
 			Message struct {
 				Content string `json:"content"`
 			} `json:"message"`
-			Done bool `json:"done"`
+			Done            bool  `json:"done"`
+			PromptEvalCount int64 `json:"prompt_eval_count"`
+			EvalCount       int64 `json:"eval_count"`
+			TotalDuration   int64 `json:"total_duration"`
+			EvalDuration    int64 `json:"eval_duration"`
 		}
 		if err := json.Unmarshal(sc.Bytes(), &item); err != nil {
-			return "", err
+			return StreamResult{}, err
 		}
 		if item.Message.Content != "" {
+			if firstTokenMs == 0 {
+				firstTokenMs = time.Since(started).Milliseconds()
+			}
 			full.WriteString(item.Message.Content)
 			if err := onChunk(item.Message.Content); err != nil {
-				return "", err
+				return StreamResult{}, err
+			}
+		}
+		if item.Done {
+			metrics.InputTokens = item.PromptEvalCount
+			metrics.OutputTokens = item.EvalCount
+			metrics.TotalTokens = item.PromptEvalCount + item.EvalCount
+			if item.TotalDuration > 0 {
+				metrics.DurationMs = item.TotalDuration / int64(time.Millisecond)
+			} else {
+				metrics.DurationMs = time.Since(started).Milliseconds()
+			}
+			if item.EvalDuration > 0 && item.EvalCount > 0 {
+				metrics.TokensPerSec = float64(item.EvalCount) / (float64(item.EvalDuration) / float64(time.Second))
 			}
 		}
 	}
 	if err := sc.Err(); err != nil {
-		return "", err
+		return StreamResult{}, err
 	}
-	return full.String(), nil
+	if metrics.DurationMs == 0 {
+		metrics.DurationMs = time.Since(started).Milliseconds()
+	}
+	metrics.FirstTokenMs = firstTokenMs
+	return StreamResult{Text: full.String(), Metrics: metrics}, nil
 }
 
-func streamOpenAI(provider db.Provider, req Request, onChunk ChunkFunc) (string, error) {
+func streamOpenAI(provider db.Provider, req Request, onChunk ChunkFunc) (StreamResult, error) {
+	started := time.Now()
 	envName := provider.APIKeyEnv
 	if envName == "" {
 		ref := provider.CredentialRef
@@ -77,18 +106,15 @@ func streamOpenAI(provider db.Provider, req Request, onChunk ChunkFunc) (string,
 	}
 	var userContent any = req.Input
 	if req.ImageBase64 != "" {
-		userContent = []map[string]any{
-			{"type": "text", "text": req.Input},
-			{"type": "image_url", "image_url": map[string]string{"url": "data:image/png;base64," + req.ImageBase64}},
-		}
+		userContent = []map[string]any{{"type": "text", "text": req.Input}, {"type": "image_url", "image_url": map[string]string{"url": "data:image/png;base64," + req.ImageBase64}}}
 	}
-	body := map[string]any{"model": req.Model, "stream": true, "messages": []map[string]any{{"role": "system", "content": req.Spell}, {"role": "user", "content": userContent}}, "temperature": valueOr(req.Temperature, .2)}
+	body := map[string]any{"model": req.Model, "stream": true, "messages": []map[string]any{{"role": "system", "content": req.Spell}, {"role": "user", "content": userContent}}, "temperature": valueOr(req.Temperature, .2), "stream_options": map[string]any{"include_usage": true}}
 	if req.MaxTokens != nil {
 		body["max_tokens"] = *req.MaxTokens
 	}
 	payload, err := json.Marshal(body)
 	if err != nil {
-		return "", err
+		return StreamResult{}, err
 	}
 	base := strings.TrimRight(provider.BaseURL, "/")
 	if base == "" {
@@ -96,7 +122,7 @@ func streamOpenAI(provider db.Provider, req Request, onChunk ChunkFunc) (string,
 	}
 	hreq, err := http.NewRequest(http.MethodPost, base+"/chat/completions", bytes.NewReader(payload))
 	if err != nil {
-		return "", err
+		return StreamResult{}, err
 	}
 	hreq.Header.Set("Content-Type", "application/json")
 	hreq.Header.Set("Accept", "text/event-stream")
@@ -106,7 +132,7 @@ func streamOpenAI(provider db.Provider, req Request, onChunk ChunkFunc) (string,
 	if provider.HeadersJSON != "" && provider.HeadersJSON != "{}" {
 		var hs map[string]string
 		if err := json.Unmarshal([]byte(provider.HeadersJSON), &hs); err != nil {
-			return "", fmt.Errorf("invalid custom headers JSON: %w", err)
+			return StreamResult{}, fmt.Errorf("invalid custom headers JSON: %w", err)
 		}
 		for k, v := range hs {
 			hreq.Header.Set(k, v)
@@ -114,14 +140,16 @@ func streamOpenAI(provider db.Provider, req Request, onChunk ChunkFunc) (string,
 	}
 	resp, err := http.DefaultClient.Do(hreq)
 	if err != nil {
-		return "", err
+		return StreamResult{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return "", fmt.Errorf("provider returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+		return StreamResult{}, fmt.Errorf("provider returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
 	}
 	var full strings.Builder
+	firstTokenMs := int64(0)
+	metrics := Metrics{}
 	sc := bufio.NewScanner(resp.Body)
 	sc.Buffer(make([]byte, 4096), 4*1024*1024)
 	for sc.Scan() {
@@ -139,20 +167,38 @@ func streamOpenAI(provider db.Provider, req Request, onChunk ChunkFunc) (string,
 					Content string `json:"content"`
 				} `json:"delta"`
 			} `json:"choices"`
+			Usage *struct {
+				PromptTokens     int64 `json:"prompt_tokens"`
+				CompletionTokens int64 `json:"completion_tokens"`
+				TotalTokens      int64 `json:"total_tokens"`
+			} `json:"usage"`
 		}
 		if err := json.Unmarshal([]byte(data), &item); err != nil {
-			return "", err
+			return StreamResult{}, err
+		}
+		if item.Usage != nil {
+			metrics.InputTokens = item.Usage.PromptTokens
+			metrics.OutputTokens = item.Usage.CompletionTokens
+			metrics.TotalTokens = item.Usage.TotalTokens
 		}
 		if len(item.Choices) > 0 && item.Choices[0].Delta.Content != "" {
 			c := item.Choices[0].Delta.Content
+			if firstTokenMs == 0 {
+				firstTokenMs = time.Since(started).Milliseconds()
+			}
 			full.WriteString(c)
 			if err := onChunk(c); err != nil {
-				return "", err
+				return StreamResult{}, err
 			}
 		}
 	}
 	if err := sc.Err(); err != nil {
-		return "", err
+		return StreamResult{}, err
 	}
-	return full.String(), nil
+	metrics.DurationMs = time.Since(started).Milliseconds()
+	metrics.FirstTokenMs = firstTokenMs
+	if metrics.OutputTokens > 0 && metrics.DurationMs > 0 {
+		metrics.TokensPerSec = float64(metrics.OutputTokens) / (float64(metrics.DurationMs) / 1000)
+	}
+	return StreamResult{Text: full.String(), Metrics: metrics}, nil
 }

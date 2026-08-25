@@ -265,16 +265,62 @@ Only record durable architectural/product changes here. Do not append repetitive
 - Fixed screenshot selection so the captured screen remains visible as the fullscreen selection background instead of appearing black.
 - Added a cropped screenshot preview with Cancel and Confirm & Send actions; the image is sent to the LLM only after confirmation.
 
+### Phase 2 — Screenshot Preview Fix
+
+- Fixed screenshot selection so the captured screen remains visible as the fullscreen selection background instead of appearing black.
+- Added a cropped screenshot preview with Cancel and Confirm & Send actions; the image is sent to the LLM only after confirmation.
+
+### Phase 3 — Execution History & Chat Inspector
+
+- Added persistent execution history for text and screenshot requests in SQLite.
+- History records retain configuration/provider/model, prompt, system prompt, screenshot payload when present, response, status/error, timestamps, duration, first-token latency, token usage and tokens/sec when supplied by the provider.
+- Added paginated history APIs with free-text search and filters by status, input type and configuration.
+- Added a History panel to the overlay with searchable/filterable execution list and a full execution detail view.
+- OpenAI-compatible streaming requests ask for usage metadata when supported; Ollama streaming captures prompt/eval token counters and evaluation speed when supplied.
+
+### Phase 4 — History reliability, hotkey guard & configurable storage
+
+- Hardened the global hotkey callback against duplicate/re-entrant trigger events during modifier transitions.
+- Made execution history queries resilient to deleted/missing configurations/providers by using left joins and readable fallback names.
+- Added configurable database and screenshot-image storage paths through bootstrap storage settings.
+- New screenshot images are persisted as PNG files under the configured image directory; history detail reads them back for display.
+- Added General Settings controls for database and chat-image paths. Path changes are saved immediately and require an application restart to reopen the database at the new database path.
+- Added a manual History refresh action and null-safe history-page handling.
+
+### Phase 5 — History execution model persistence fix
+
+- Fixed History loading failure caused by history queries reading `executions.model` while older schemas had no model column.
+- Added an idempotent `model` migration and persist the selected model at execution start so history retains the exact model used at request time.
+- Existing text and screenshot execution paths now provide the model when recording history; older rows remain readable with an empty model value.
+- History UI now surfaces backend load errors instead of silently displaying an empty `No executions found` state.
+
+### Phase 6 — Hotkey Escape fix & draggable frameless window
+
+- Fixed Overlay keyboard handling so only the actual Escape key closes/cancels the current view; modifier keys such as Ctrl no longer hide the app.
+- Added Wails frameless-window drag handles to the Overlay, History and Settings headers, while keeping buttons and interactive controls non-draggable.
+- Uses Wails CSS drag regions (`--wails-draggable: drag` / `no-drag`) for native window movement.
+
+### Phase 7 — Hidden screenshot capture process
+
+- Fixed Windows screenshot capture so the PowerShell helper process runs with its console window hidden.
+- Prevents the terminal from appearing over the desktop during capture and from being included in the captured image.
+- Screenshot selection / preview / confirm flow remains unchanged.
+
 ---
 
 ## Current Roadmap
 
-```text
-Phase 0 -> RTL Results and Vision Screenshots -> Done
-```
-
 The completed phases are located here.
 
+```text
+Phase 1 -> RTL Results and Vision Screenshots -> Done
+Phase 2 -> Screenshot Preview Fix -> Done
+Phase 3 -> Execution History & Chat Inspector -> Done
+Phase 4 -> History reliability, hotkey guard & configurable storage -> Done
+Phase 5 -> History execution model persistence fix -> Done
+Phase 6 -> Hotkey Escape fix & draggable frameless window -> Done
+Phase 7 -> Hidden screenshot capture process -> Done
+```
 
 The exact next Phase may change; when it does, update the roadmap rather than keeping contradictory plans.
 

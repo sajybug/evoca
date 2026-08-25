@@ -16,15 +16,21 @@ export function GetConfiguration(arg1:string):Promise<db.Configuration>;
 
 export function GetConfigurations():Promise<Array<db.Configuration>>;
 
+export function GetExecution(arg1:string):Promise<db.Execution>;
+
 export function GetHotkey():Promise<string>;
 
 export function GetProviderModels(arg1:string):Promise<Array<db.ProviderModel>>;
 
 export function GetProviders():Promise<Array<db.Provider>>;
 
+export function GetStorageSettings():Promise<db.StorageSettings>;
+
 export function HideOverlay():Promise<void>;
 
 export function InvokeConfiguration(arg1:string,arg2:string):Promise<string>;
+
+export function ListExecutions(arg1:number,arg2:number,arg3:string,arg4:string,arg5:string,arg6:string):Promise<db.ExecutionPage>;
 
 export function PreviewScreenshot(arg1:number,arg2:number,arg3:number,arg4:number,arg5:number,arg6:number):Promise<string>;
 
@@ -37,6 +43,8 @@ export function SaveProvider(arg1:db.Provider):Promise<void>;
 export function SaveProviderModel(arg1:db.ProviderModel):Promise<void>;
 
 export function SetHotkey(arg1:string):Promise<void>;
+
+export function SetStorageSettings(arg1:db.StorageSettings):Promise<void>;
 
 export function StartConfigurationStream(arg1:string,arg2:string,arg3:string):Promise<void>;
 

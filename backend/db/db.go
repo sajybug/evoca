@@ -15,26 +15,28 @@ import (
 )
 
 type DB struct {
-	conn *sql.DB
+	conn     *sql.DB
+	imageDir string
 }
 
 func Open(ctx context.Context) (*DB, error) {
-	base, err := os.UserConfigDir()
+	settings, err := LoadStorageSettings()
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Dir(settings.DatabasePath), 0o755); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(settings.ImagesPath, 0o755); err != nil {
+		return nil, err
+	}
+
+	conn, err := sql.Open("sqlite", settings.DatabasePath)
 	if err != nil {
 		return nil, err
 	}
 
-	dir := filepath.Join(base, "eVoca")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, err
-	}
-
-	conn, err := sql.Open("sqlite", filepath.Join(dir, "evoca.db"))
-	if err != nil {
-		return nil, err
-	}
-
-	d := &DB{conn: conn}
+	d := &DB{conn: conn, imageDir: settings.ImagesPath}
 	if err := d.initializeSchema(); err != nil {
 		_ = conn.Close()
 		return nil, err
@@ -81,11 +83,22 @@ func (d *DB) initializeSchema() error {
 		CREATE TABLE IF NOT EXISTS executions (
 			id TEXT PRIMARY KEY,
 			configuration_id TEXT NOT NULL,
+			model TEXT NOT NULL DEFAULT '',
 			input TEXT,
 			output TEXT,
 			status TEXT NOT NULL,
 			created_at INTEGER NOT NULL,
-			duration_ms INTEGER
+			duration_ms INTEGER,
+			request_type TEXT NOT NULL DEFAULT 'text',
+			system_prompt TEXT NOT NULL DEFAULT '',
+			image_data TEXT NOT NULL DEFAULT '',
+			completed_at INTEGER,
+			error_text TEXT NOT NULL DEFAULT '',
+			first_token_ms INTEGER NOT NULL DEFAULT 0,
+			input_tokens INTEGER NOT NULL DEFAULT 0,
+			output_tokens INTEGER NOT NULL DEFAULT 0,
+			total_tokens INTEGER NOT NULL DEFAULT 0,
+			tokens_per_sec REAL NOT NULL DEFAULT 0
 		);
 
 		CREATE TABLE IF NOT EXISTS settings (
@@ -116,6 +129,23 @@ func (d *DB) initializeSchema() error {
 	}
 	if err := d.ensureColumn("providers", "headers_json", "TEXT"); err != nil {
 		return err
+	}
+	for _, column := range []struct{ name, definition string }{
+		{"model", "TEXT NOT NULL DEFAULT ''"},
+		{"request_type", "TEXT NOT NULL DEFAULT 'text'"},
+		{"system_prompt", "TEXT NOT NULL DEFAULT ''"},
+		{"image_data", "TEXT NOT NULL DEFAULT ''"},
+		{"completed_at", "INTEGER"},
+		{"error_text", "TEXT NOT NULL DEFAULT ''"},
+		{"first_token_ms", "INTEGER NOT NULL DEFAULT 0"},
+		{"input_tokens", "INTEGER NOT NULL DEFAULT 0"},
+		{"output_tokens", "INTEGER NOT NULL DEFAULT 0"},
+		{"total_tokens", "INTEGER NOT NULL DEFAULT 0"},
+		{"tokens_per_sec", "REAL NOT NULL DEFAULT 0"},
+	} {
+		if err := d.ensureColumn("executions", column.name, column.definition); err != nil {
+			return err
+		}
 	}
 	if _, err := d.conn.Exec(`UPDATE providers SET headers_json='{}' WHERE headers_json IS NULL OR TRIM(headers_json)=''`); err != nil {
 		return err

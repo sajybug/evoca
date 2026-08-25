@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
 	"time"
 )
 
@@ -26,7 +27,11 @@ func capturePrimaryScreen() ([]byte, error) {
 	script := "$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.Drawing; Add-Type @'\nusing System; using System.Runtime.InteropServices; public static class EvocaScreen { [DllImport(\"user32.dll\")] public static extern int GetSystemMetrics(int nIndex); }\n'@; $w=[EvocaScreen]::GetSystemMetrics(0); $h=[EvocaScreen]::GetSystemMetrics(1); $bmp=New-Object System.Drawing.Bitmap $w,$h; $g=[System.Drawing.Graphics]::FromImage($bmp); $g.CopyFromScreen(0,0,0,0,(New-Object System.Drawing.Size($w,$h))); $bmp.Save('" + escaped + "',[System.Drawing.Imaging.ImageFormat]::Png); $g.Dispose(); $bmp.Dispose(); Write-Output \"$w,$h\""
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script).CombinedOutput()
+	cmd := exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script)
+	// Never show the PowerShell console while capturing the desktop.
+	// Otherwise the console can cover the target area and can be captured itself.
+	hideConsoleWindow(cmd)
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		_ = os.Remove(path)
 		return nil, fmt.Errorf("capture screen: %w: %s", err, strings.TrimSpace(string(out)))

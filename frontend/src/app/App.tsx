@@ -4,11 +4,13 @@ import { useOverlayStore } from "../stores/overlayStore";
 import { evoca } from "../services/evoca";
 import { Overlay } from "../components/overlay/Overlay";
 import { Settings } from "../components/settings/Settings";
+import { HistoryPanel } from "../components/history/HistoryPanel";
 import type { Configuration } from "../types/domain";
 
 export default function App() {
   const [configurations, setConfigurations] = useState<Configuration[]>([]);
   const [showSettings, setShowSettings] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const open = useOverlayStore((s) => s.open);
 
   useEffect(() => {
@@ -16,6 +18,7 @@ export default function App() {
 
     const cancel = EventsOn("evoca:overlay", () => {
       setShowSettings(false);
+      setShowHistory(false);
       open();
     });
 
@@ -24,7 +27,9 @@ export default function App() {
 
   return (
     <div className="app-root">
-      {showSettings ? (
+      {showHistory ? (
+        <HistoryPanel configurations={configurations} onClose={() => setShowHistory(false)} />
+      ) : showSettings ? (
         <Settings
           configurations={configurations}
           onChange={setConfigurations}
@@ -34,6 +39,7 @@ export default function App() {
         <Overlay
           configurations={configurations}
           onOpenSettings={() => setShowSettings(true)}
+          onOpenHistory={() => setShowHistory(true)}
         />
       )}
     </div>

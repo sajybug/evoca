@@ -32,3 +32,48 @@ export interface ProviderModel {
   displayName?: string;
   createdAt: number;
 }
+
+export interface ExecutionMetrics {
+  durationMs: number;
+  firstTokenMs: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  tokensPerSec: number;
+}
+
+export interface Execution {
+  id: string;
+  configurationId: string;
+  configurationName: string;
+  providerName: string;
+  model: string;
+  requestType: string;
+  input: string;
+  systemPrompt: string;
+  imageData?: string;
+  output: string;
+  error?: string;
+  status: string;
+  createdAt: number;
+  completedAt?: number;
+  durationMs: number;
+  firstTokenMs: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  tokensPerSec: number;
+}
+
+export interface ExecutionPage {
+  items: Execution[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface StorageSettings {
+  databasePath: string;
+  imagesPath: string;
+}

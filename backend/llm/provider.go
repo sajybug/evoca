@@ -33,13 +33,13 @@ func (r *Registry) Generate(provider db.Provider, request Request) (string, erro
 		return "", fmt.Errorf("unsupported provider type: %s", provider.Kind)
 	}
 }
-func (r *Registry) GenerateStream(provider db.Provider, request Request, onChunk ChunkFunc) (string, error) {
+func (r *Registry) GenerateStream(provider db.Provider, request Request, onChunk ChunkFunc) (StreamResult, error) {
 	switch strings.ToLower(provider.Kind) {
 	case "openai_compatible":
 		return streamOpenAI(provider, request, onChunk)
 	case "ollama":
 		return streamOllama(provider, request, onChunk)
 	default:
-		return "", fmt.Errorf("unsupported provider type: %s", provider.Kind)
+		return StreamResult{}, fmt.Errorf("unsupported provider type: %s", provider.Kind)
 	}
 }
