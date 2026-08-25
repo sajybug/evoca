@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Configuration, Provider } from "../../types/domain";
 import { useOverlayStore } from "../../stores/overlayStore";
 import { evoca } from "../../services/evoca";
-import { EventsOn } from "../../wailsjs/runtime/runtime";
+import { EventsOn, ClipboardGetText  } from "../../wailsjs/runtime/runtime";
 import { Markdown } from "./Markdown";
 
 type Point = { x: number; y: number };
@@ -316,21 +316,38 @@ export function Overlay({
   }
 
   if (state.state === "input") {
+    const handlePaste = async () => {
+      try {
+        const text = await ClipboardGetText();
+        if (!text) return;
+
+        const nextInput = state.input ? `${state.input}\n${text}` : text;
+        state.setInput(nextInput);
+      } catch (err) {
+        console.error("Failed to read clipboard via Wails runtime:", err);
+      }
+    };
     return (
-      <section className="panel">
-        <div className="title window-drag-handle"><button className="back-button" onClick={backToConfigurations}>← Back</button><span>{selected?.name}</span></div>
+      <section className="panel flex flex-col h-full min-h-[400px]">
+        <div className="title window-drag-handle flex-shrink-0">
+          <button className="back-button" onClick={backToConfigurations}>← Back</button><span>{selected?.name}</span>
+        </div>
         <textarea
           autoFocus
+          className="flex-1 w-full resize-none p-3 outline-none overflow-y-auto"
           disabled={streaming}
           placeholder="Enter text or a prompt for the screenshot..."
           value={state.input}
           onChange={(e) => state.setInput(e.target.value)}
           onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") void run(); }}
         />
-        <footer>
+        <footer className="flex-shrink-0 flex items-center justify-between gap-2 p-2">
           <span>Ctrl+Enter to run</span>
-          <button disabled={streaming} onClick={() => void beginScreenshot()}>Screenshot</button>
-          <button className="primary" disabled={streaming} onClick={() => void run()}>Run</button>
+          <div className="flex gap-2">
+            <button type="button"  disabled={streaming}  onClick={() => void handlePaste()} >Paste</button>
+            <button disabled={streaming} onClick={() => void beginScreenshot()}>Screenshot</button>
+            <button className="primary" disabled={streaming} onClick={() => void run()}>Run</button>
+          </div>
         </footer>
       </section>
     );
@@ -338,10 +355,14 @@ export function Overlay({
 
   if (state.state === "output") {
     return (
-      <section className="panel">
-        <div className="title window-drag-handle"><button className="back-button" onClick={backToConfigurations}>← Back</button><span>Result</span></div>
-        <div className="result"><Markdown source={state.output} /></div>
-        <footer>
+      <section className="panel flex flex-col h-full min-h-[400px]">
+        <div className="title window-drag-handle">
+          <button className="back-button" onClick={backToConfigurations}>← Back</button><span>Result</span>
+        </div>
+        <div className="result flex-1 w-full resize-none p-3 outline-none overflow-y-auto">
+          <Markdown source={state.output} />
+        </div>
+        <footer className="flex-shrink-0">
           <button onClick={() => navigator.clipboard.writeText(state.output)}>Copy</button>
           <button className="primary" onClick={() => { state.close(); void evoca.hideOverlay(); }}>Close</button>
         </footer>
