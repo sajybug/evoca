@@ -317,6 +317,18 @@ Only record durable architectural/product changes here. Do not append repetitive
 - Loading behavior is reasoning-friendly: before visible output arrives, the UI uses a compact “Thinking…” state with elapsed seconds instead of a large indefinite spinner, then switches to live streamed output as soon as visible content arrives.
 - Back actions use a white label.
 
+### Phase 9 — Tailwind v4 UI rebuild
+
+- Migrated the frontend styling pipeline to Tailwind CSS v4.3.3 using the official `@tailwindcss/vite` plugin.
+- Rebuilt the visual system around a dark-first compact desktop-app treatment while keeping the existing eVoca brand mark and gold accent.
+- Standardized panels, inputs, buttons, tabs, sidebars, history cards, loading states, screenshot preview, markdown output and scroll behavior for more consistent spacing, hierarchy and interaction states.
+- Kept the minimal overlay interaction model, while giving Settings and History a denser app-like layout without changing their existing data flow or backend contracts.
+- No new icon dependency was added to avoid unnecessary runtime/bundle overhead.
+- Direction changed from simple dark utility UI to a more premium productivity-tool visual language.
+- Preserved existing eVoca brand mark and dark/gold identity.
+- Overlay is intentionally quiet/minimal; Settings and History use denser app-like layouts.
+- Reduced visual noise, standardized surfaces, radii, borders, typography, buttons, fields, states, and selection overlays.
+
 ---
 
 ## Current Roadmap
@@ -332,6 +344,7 @@ Phase 5 -> History execution model persistence fix -> Done
 Phase 6 -> Hotkey Escape fix & draggable frameless window -> Done
 Phase 7 -> Hidden screenshot capture process -> Done
 Phase 8 -> Configuration details, provider discovery & LLM loading -> Done
+Phase 9 -> Tailwind v4 UI rebuild -> Done
 ```
 
 The exact next Phase may change; when it does, update the roadmap rather than keeping contradictory plans.

@@ -10,6 +10,56 @@ interface Props {
 
 type Section = "general" | "configurations" | "providers";
 
+
+function Icon({ name }: { name: "trash" | "save" | "x" | "power" }) {
+  const common = {
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+
+  if (name === "trash") {
+    return (
+      <svg {...common} aria-hidden="true">
+        <path d="M4 7h16" />
+        <path d="M9 7V4h6v3" />
+        <path d="M7 7l1 13h8l1-13" />
+        <path d="M10 11v5M14 11v5" />
+      </svg>
+    );
+  }
+
+  if (name === "save") {
+    return (
+      <svg {...common} aria-hidden="true">
+        <path d="M5 4h12l2 2v14H5z" />
+        <path d="M8 4v6h8V4" />
+        <path d="M8 20v-6h8v6" />
+      </svg>
+    );
+  }
+
+  if (name === "x") {
+    return (
+      <svg {...common} aria-hidden="true">
+        <path d="M6 6l12 12M18 6L6 18" />
+      </svg>
+    );
+  }
+
+  // power
+  return (
+    <svg {...common} aria-hidden="true">
+      <path d="M12 3v9" />
+      <path d="M6.35 6.35a8 8 0 1 0 11.3 0" />
+    </svg>
+  );
+}
+
+
 const freshConfiguration = (providers: Provider[]): Configuration => ({
   id: crypto.randomUUID(),
   name: "New Configuration",
@@ -314,11 +364,11 @@ export function Settings({ configurations, onChange, onClose }: Props) {
 
   return (
     <section className="panel settings-panel">
-      <div className="brand-row window-drag-handle">
-        <div><span className="brand-mark">✦</span> Settings</div>
+      <div className="brand window-drag-handle">
+        <div><span className="brand-mark">✦</span><b>Settings</b></div>
         <div className="settings-actions">
-          <button type="button" className="text-button" onClick={onClose}>Close</button>
-          <button type="button" className="danger" onClick={() => void evoca.quit()}>Exit eVoca</button>
+          <button type="button" className="chrome-button" onClick={onClose}><Icon name="x" /><span>Close</span></button>
+          <button type="button" className="chrome-button chrome-button-danger" onClick={() => void evoca.quit()}><Icon name="power" /><span>Exit eVoca</span></button>
         </div>
       </div>
 
@@ -457,15 +507,15 @@ export function Settings({ configurations, onChange, onClose }: Props) {
                   <label>Max tokens<input type="number" min="1" value={configuration.maxTokens ?? 2000} onChange={e => setConfiguration({...configuration,maxTokens:Number(e.target.value)})}/></label>
                 </div>
 
-                <div className="footer">
-                  <button type="button" className="danger" onClick={async () => {
+                <div className="footer settings-actions">
+                  <button type="button" className="chrome-button chrome-button-danger" onClick={async () => {
                     await evoca.deleteConfiguration(configuration.id);
                     const next = await evoca.getConfigurations();
                     onChange(next);
                     setConfiguration(next[0] ?? null);
-                  }}>Delete</button>
-                  <button type="button" className="primary" disabled={saving} onClick={() => void saveConfiguration()}>
-  {saving ? "Saving..." : "Save configuration"}
+                  }}><Icon name="trash" /><span>Delete</span></button>
+                  <button type="button" className="action-button" disabled={saving} onClick={() => void saveConfiguration()}>
+  <Icon name="save" /><span>{saving ? "Saving..." : "Save configuration"}</span>
 </button>
                 </div>
               </>

@@ -43,7 +43,7 @@ export function HistoryPanel({ configurations, onClose }: { configurations: Conf
       </div>
       <div className="history-detail">{selected ? <>
         <div className="editor-heading"><h3>{selected.configurationName}</h3><span>{selected.providerName} · {selected.model}</span></div>
-        <div className="history-stats"><span>Status <b>{selected.status}</b></span><span>Duration <b>{formatDuration(selected.durationMs)}</b></span><span>TTFT <b>{formatDuration(selected.firstTokenMs)}</b></span><span>Tokens <b>{selected.totalTokens || "—"}</b></span><span>Speed <b>{selected.tokensPerSec ? `${selected.tokensPerSec.toFixed(1)} tok/s` : "—"}</b></span></div>
+        <div className="history-stats"><span className="history-stat-neutral">Status <b>{selected.status}</b></span><span>Duration <b>{formatDuration(selected.durationMs)}</b></span><span>TTFT <b>{formatDuration(selected.firstTokenMs)}</b></span><span>Tokens <b>{selected.totalTokens || "—"}</b></span><span>Speed <b>{selected.tokensPerSec ? `${selected.tokensPerSec.toFixed(1)} tok/s` : "—"}</b></span></div>
         <div className="history-section"><div className="section-title">Request</div><div className="history-code"><b>Sent:</b><pre>{selected.input || "(empty)"}</pre><b>System prompt:</b><pre>{selected.systemPrompt || "(empty)"}</pre></div></div>
         {selected.imageData && <div className="history-section"><div className="section-title">Screenshot</div><div className="history-image-wrap"><img src={`data:image/png;base64,${selected.imageData}`} alt="Request screenshot" /></div></div>}
         <div className="history-section"><div className="section-title">Response</div><div className="history-response"><Markdown source={selected.output || selected.error || "(no response)"} /></div></div>
