@@ -20,7 +20,11 @@ func streamOllama(provider db.Provider, req Request, onChunk ChunkFunc) (string,
 	if base == "" {
 		base = "http://localhost:11434"
 	}
-	body := map[string]any{"model": req.Model, "stream": true, "messages": []map[string]string{{"role": "system", "content": req.Spell}, {"role": "user", "content": req.Input}}}
+	user := map[string]any{"role": "user", "content": req.Input}
+	if req.ImageBase64 != "" {
+		user["images"] = []string{req.ImageBase64}
+	}
+	body := map[string]any{"model": req.Model, "stream": true, "messages": []map[string]any{{"role": "system", "content": req.Spell}, user}}
 	payload, _ := json.Marshal(body)
 	hreq, err := http.NewRequest(http.MethodPost, base+"/api/chat", bytes.NewReader(payload))
 	if err != nil {
@@ -71,7 +75,14 @@ func streamOpenAI(provider db.Provider, req Request, onChunk ChunkFunc) (string,
 		}
 		envName = "EVOCA_" + strings.ToUpper(ref)
 	}
-	body := map[string]any{"model": req.Model, "stream": true, "messages": []map[string]string{{"role": "system", "content": req.Spell}, {"role": "user", "content": req.Input}}, "temperature": valueOr(req.Temperature, .2)}
+	var userContent any = req.Input
+	if req.ImageBase64 != "" {
+		userContent = []map[string]any{
+			{"type": "text", "text": req.Input},
+			{"type": "image_url", "image_url": map[string]string{"url": "data:image/png;base64," + req.ImageBase64}},
+		}
+	}
+	body := map[string]any{"model": req.Model, "stream": true, "messages": []map[string]any{{"role": "system", "content": req.Spell}, {"role": "user", "content": userContent}}, "temperature": valueOr(req.Temperature, .2)}
 	if req.MaxTokens != nil {
 		body["max_tokens"] = *req.MaxTokens
 	}

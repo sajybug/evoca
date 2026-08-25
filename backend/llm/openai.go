@@ -27,11 +27,18 @@ func (p OpenAICompatible) Generate(req Request) (string, error) {
 
 	apiKey := os.Getenv(envName)
 
+	userContent := any(req.Input)
+	if req.ImageBase64 != "" {
+		userContent = []map[string]any{
+			{"type": "text", "text": req.Input},
+			{"type": "image_url", "image_url": map[string]string{"url": "data:image/png;base64," + req.ImageBase64}},
+		}
+	}
 	body := map[string]any{
 		"model": req.Model,
-		"messages": []map[string]string{
+		"messages": []map[string]any{
 			{"role": "system", "content": req.Spell},
-			{"role": "user", "content": req.Input},
+			{"role": "user", "content": userContent},
 		},
 		"temperature": valueOr(req.Temperature, 0.2),
 	}

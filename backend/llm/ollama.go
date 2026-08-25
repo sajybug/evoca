@@ -15,7 +15,11 @@ func (p Ollama) Generate(req Request) (string, error) {
 	if base == "" {
 		base = "http://localhost:11434"
 	}
-	body := map[string]any{"model": req.Model, "stream": false, "messages": []map[string]string{{"role": "system", "content": req.Spell}, {"role": "user", "content": req.Input}}}
+	user := map[string]any{"role": "user", "content": req.Input}
+	if req.ImageBase64 != "" {
+		user["images"] = []string{req.ImageBase64}
+	}
+	body := map[string]any{"model": req.Model, "stream": false, "messages": []map[string]any{{"role": "system", "content": req.Spell}, user}}
 	payload, _ := json.Marshal(body)
 	resp, err := http.Post(base+"/api/chat", "application/json", bytes.NewReader(payload))
 	if err != nil {

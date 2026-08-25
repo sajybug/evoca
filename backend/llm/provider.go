@@ -14,6 +14,7 @@ type Request struct {
 	Temperature *float32
 	MaxTokens   *int64
 	OutputType  string
+	ImageBase64 string
 }
 
 type Provider interface {

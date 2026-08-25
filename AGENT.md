@@ -250,7 +250,28 @@ Configuration
 
 Adding a provider should not require a code change to the Configuration model.
 
+---
+
+## Phase History
+
+Only record durable architectural/product changes here. Do not append repetitive implementation notes.
+
+### Phase 1 — RTL Results and Vision Screenshots
+
+- Added automatic RTL/LTR direction detection for rendered LLM Markdown while keeping code blocks LTR.
+- Added Overlay Screenshot flow: hide eVoca, capture the primary Windows display, select a screen region, crop it, and send the image with the prompt to the selected Configuration using the existing streaming result path.
+- Added image payload support to OpenAI-compatible and Ollama providers; vision-capable models are required for image understanding.
+- No database migration is required. Tests and build were intentionally not run for this delivery.
+- Fixed screenshot selection so the captured screen remains visible as the fullscreen selection background instead of appearing black.
+- Added a cropped screenshot preview with Cancel and Confirm & Send actions; the image is sent to the LLM only after confirmation.
+
+---
+
 ## Current Roadmap
+
+```text
+Phase 0 -> RTL Results and Vision Screenshots -> Done
+```
 
 The completed phases are located here.
 

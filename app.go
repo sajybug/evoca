@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/evoca-dev/evoca/backend/db"
@@ -12,11 +14,13 @@ import (
 )
 
 type App struct {
-	ctx       context.Context
-	database  *db.DB
-	providers *llm.Registry
-	hotkey    *hotkey.Manager
+	ctx            context.Context
+	database       *db.DB
+	providers      *llm.Registry
+	hotkey         *hotkey.Manager
 	overlayVisible bool
+	screenshotMu   sync.Mutex
+	screenshotPNG  []byte
 }
 
 func NewApp() *App {
@@ -81,6 +85,59 @@ func (a *App) ToggleOverlay() {
 	runtime.EventsEmit(a.ctx, "evoca:overlay", map[string]any{
 		"timestamp": time.Now().UnixMilli(),
 	})
+}
+
+func (a *App) BeginScreenshot() (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("app is not initialized")
+	}
+	// Hide eVoca before capture so its own window is never included in the image.
+	a.HideOverlay()
+	time.Sleep(120 * time.Millisecond)
+	pngData, err := capturePrimaryScreen()
+	if err != nil {
+		runtime.WindowShow(a.ctx)
+		a.overlayVisible = true
+		return "", err
+	}
+	a.screenshotMu.Lock()
+	a.screenshotPNG = pngData
+	a.screenshotMu.Unlock()
+	runtime.WindowShow(a.ctx)
+	runtime.WindowSetAlwaysOnTop(a.ctx, true)
+	runtime.WindowFullscreen(a.ctx)
+	runtime.EventsEmit(a.ctx, "evoca:screenshot:ready", map[string]any{"timestamp": time.Now().UnixMilli()})
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(pngData), nil
+}
+
+func (a *App) PreviewScreenshot(x, y, width, height, viewportWidth, viewportHeight int) (string, error) {
+	a.screenshotMu.Lock()
+	pngData := append([]byte(nil), a.screenshotPNG...)
+	a.screenshotMu.Unlock()
+	if len(pngData) == 0 {
+		return "", fmt.Errorf("no screenshot is available")
+	}
+	imageBase64, err := cropPNG(pngData, x, y, width, height, viewportWidth, viewportHeight)
+	if err != nil {
+		return "", err
+	}
+	return "data:image/png;base64," + imageBase64, nil
+}
+
+func (a *App) CancelScreenshot() {
+	a.screenshotMu.Lock()
+	a.screenshotPNG = nil
+	a.screenshotMu.Unlock()
+	a.restoreScreenshotWindow()
+}
+
+func (a *App) restoreScreenshotWindow() {
+	if a.ctx == nil {
+		return
+	}
+	runtime.WindowUnfullscreen(a.ctx)
+	runtime.WindowShow(a.ctx)
+	runtime.WindowSetAlwaysOnTop(a.ctx, true)
 }
 
 func (a *App) HideOverlay() {
@@ -219,6 +276,50 @@ func (a *App) StartConfigurationStream(id, input, requestID string) error {
 	runtime.EventsEmit(a.ctx, "evoca:llm:start", map[string]any{"id": requestID})
 	go func() {
 		result, err := a.providers.GenerateStream(provider, llm.Request{Model: configuration.Model, Spell: configuration.Spell, Input: input, Temperature: configuration.Temperature, MaxTokens: configuration.MaxTokens, OutputType: configuration.OutputType}, func(chunk string) error {
+			runtime.EventsEmit(a.ctx, "evoca:llm:chunk", map[string]any{"id": requestID, "chunk": chunk})
+			return nil
+		})
+		if err != nil {
+			runtime.EventsEmit(a.ctx, "evoca:llm:error", map[string]any{"id": requestID, "error": err.Error()})
+			return
+		}
+		_ = a.database.RecordExecution(id, input, result, "success", 0)
+		runtime.EventsEmit(a.ctx, "evoca:llm:done", map[string]any{"id": requestID, "output": result})
+	}()
+	return nil
+}
+
+func (a *App) StartScreenshotStream(id, input, requestID string, x, y, width, height, viewportWidth, viewportHeight int) error {
+	if a.database == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	configuration, err := a.database.GetConfiguration(id)
+	if err != nil {
+		return err
+	}
+	provider, err := a.database.GetProvider(configuration.ProviderID)
+	if err != nil {
+		return err
+	}
+	a.screenshotMu.Lock()
+	pngData := append([]byte(nil), a.screenshotPNG...)
+	a.screenshotPNG = nil
+	a.screenshotMu.Unlock()
+	if len(pngData) == 0 {
+		a.restoreScreenshotWindow()
+		return fmt.Errorf("no screenshot is available")
+	}
+	imageBase64, err := cropPNG(pngData, x, y, width, height, viewportWidth, viewportHeight)
+	if err != nil {
+		a.restoreScreenshotWindow()
+		return err
+	}
+	runtime.WindowUnfullscreen(a.ctx)
+	runtime.WindowShow(a.ctx)
+	runtime.WindowSetAlwaysOnTop(a.ctx, true)
+	runtime.EventsEmit(a.ctx, "evoca:llm:start", map[string]any{"id": requestID})
+	go func() {
+		result, err := a.providers.GenerateStream(provider, llm.Request{Model: configuration.Model, Spell: configuration.Spell, Input: input, ImageBase64: imageBase64, Temperature: configuration.Temperature, MaxTokens: configuration.MaxTokens, OutputType: configuration.OutputType}, func(chunk string) error {
 			runtime.EventsEmit(a.ctx, "evoca:llm:chunk", map[string]any{"id": requestID, "chunk": chunk})
 			return nil
 		})

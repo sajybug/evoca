@@ -14,6 +14,10 @@ import {
   DeleteProviderModel,
   GetHotkey,
   SetHotkey,
+  BeginScreenshot,
+  PreviewScreenshot,
+  CancelScreenshot,
+  StartScreenshotStream,
 } from "../wailsjs/go/main/App";
 
 import type { Configuration, Provider, ProviderModel } from "../types/domain";
@@ -65,6 +69,22 @@ export const evoca = {
 
   setHotkey(combo: string): Promise<void> {
     return SetHotkey(combo);
+  },
+
+  beginScreenshot(): Promise<string> {
+    return BeginScreenshot();
+  },
+
+  previewScreenshot(x: number, y: number, width: number, height: number, viewportWidth: number, viewportHeight: number): Promise<string> {
+    return PreviewScreenshot(x, y, width, height, viewportWidth, viewportHeight);
+  },
+
+  cancelScreenshot(): Promise<void> {
+    return CancelScreenshot();
+  },
+
+  startScreenshotStream(id: string, input: string, requestId: string, x: number, y: number, width: number, height: number, viewportWidth: number, viewportHeight: number): Promise<void> {
+    return StartScreenshotStream(id, input, requestId, x, y, width, height, viewportWidth, viewportHeight);
   },
 
   quit(): Promise<void> {
