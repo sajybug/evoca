@@ -1,0 +1,103 @@
+package llm
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"strings"
+
+	"github.com/evoca-dev/evoca/backend/db"
+)
+
+type OpenAICompatible struct {
+	Provider db.Provider
+}
+
+func (p OpenAICompatible) Generate(req Request) (string, error) {
+	envName := p.Provider.APIKeyEnv
+	if envName == "" {
+		keyRef := p.Provider.CredentialRef
+		if keyRef == "" {
+			keyRef = "openai_api_key"
+		}
+		envName = "EVOCA_" + strings.ToUpper(keyRef)
+	}
+
+	apiKey := os.Getenv(envName)
+
+	body := map[string]any{
+		"model": req.Model,
+		"messages": []map[string]string{
+			{"role": "system", "content": req.Spell},
+			{"role": "user", "content": req.Input},
+		},
+		"temperature": valueOr(req.Temperature, 0.2),
+	}
+	if req.MaxTokens != nil {
+		body["max_tokens"] = *req.MaxTokens
+	}
+
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return "", err
+	}
+
+	base := strings.TrimRight(p.Provider.BaseURL, "/")
+	if base == "" {
+		base = "https://api.openai.com/v1"
+	}
+
+	httpReq, err := http.NewRequest(http.MethodPost, base+"/chat/completions", bytes.NewReader(payload))
+	if err != nil {
+		return "", err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if apiKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+
+	if p.Provider.HeadersJSON != "" && p.Provider.HeadersJSON != "{}" {
+		var headers map[string]string
+		if err := json.Unmarshal([]byte(p.Provider.HeadersJSON), &headers); err != nil {
+			return "", fmt.Errorf("invalid custom headers JSON: %w", err)
+		}
+		for k, v := range headers {
+			httpReq.Header.Set(k, v)
+		}
+	}
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		return "", fmt.Errorf("provider returned HTTP %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	if len(result.Choices) == 0 {
+		return "", fmt.Errorf("provider returned no choices")
+	}
+	return result.Choices[0].Message.Content, nil
+}
+
+func valueOr(value *float32, fallback float32) float32 {
+	if value == nil {
+		return fallback
+	}
+	return *value
+}
