@@ -249,3 +249,39 @@ Configuration
 ```
 
 Adding a provider should not require a code change to the Configuration model.
+
+## Current Roadmap
+
+The completed phases are located here.
+
+
+The exact next Phase may change; when it does, update the roadmap rather than keeping contradictory plans.
+
+### Phase entry format
+
+```md
+### Phase N — Short Name
+
+- Added/changed ...
+- Added/changed ...
+- Important compatibility/security/migration note, if any.
+```
+
+Do not copy entire implementation notes, file lists, debugging transcripts, or repeated rules into the Phase history.
+
+---
+
+## Definition of Done
+
+A Phase is Done only when:
+
+- implementation is complete;
+- existing architecture is preserved;
+- persistence migrations are handled where needed;
+- existing Generate/Refine/Restore/Delete/Clear/Reload flows remain coherent;
+- Design isolation is preserved;
+- Frontend/Backend contracts agree;
+- security-sensitive changes are reviewed;
+- relevant tests/build checks have actually been run, or the delivery explicitly states they were not run;
+- `AGENT.md` contains the new concise Phase entry.
+- Added regression coverage for Markdown HTML extraction and Preview sanitization helpers.
