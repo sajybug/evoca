@@ -329,6 +329,15 @@ Only record durable architectural/product changes here. Do not append repetitive
 - Overlay is intentionally quiet/minimal; Settings and History use denser app-like layouts.
 - Reduced visual noise, standardized surfaces, radii, borders, typography, buttons, fields, states, and selection overlays.
 
+### Phase 10 — Full Frontend Redesign
+
+- Completely redesigned the frontend visual system and primary UI surfaces while preserving the Wails/Go architecture and existing backend contracts.
+- Reworked the launcher overlay into a compact configuration-first command palette with stronger hierarchy, configuration metadata, keyboard hints, and distinct input/loading/result states.
+- Reworked Settings into a denser premium desktop-app workspace for General, Configurations, and Providers, including clearer configuration editing, provider management, and model management.
+- Reworked History into a two-pane execution inspector with improved filtering, metadata cards, request/response sections, and screenshot inspection.
+- Replaced the previous utility styling with a cohesive dark-first premium design system using the existing eVoca gold accent, standardized surfaces, controls, spacing, typography, and interaction states.
+- No backend/data-flow changes were required for the redesign
+
 ---
 
 ## Current Roadmap
@@ -345,6 +354,7 @@ Phase 6 -> Hotkey Escape fix & draggable frameless window -> Done
 Phase 7 -> Hidden screenshot capture process -> Done
 Phase 8 -> Configuration details, provider discovery & LLM loading -> Done
 Phase 9 -> Tailwind v4 UI rebuild -> Done
+Phase 10 -> Full Frontend Redesign -> Done
 ```
 
 The exact next Phase may change; when it does, update the roadmap rather than keeping contradictory plans.

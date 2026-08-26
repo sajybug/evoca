@@ -362,272 +362,115 @@ export function Settings({ configurations, onChange, onClose }: Props) {
     }
   }
 
+
   return (
     <section className="panel settings-panel">
-      <div className="brand window-drag-handle">
-        <div><span className="brand-mark">✦</span><b>Settings</b></div>
-        <div className="settings-actions">
-          <button type="button" className="chrome-button" onClick={onClose}><Icon name="x" /><span>Close</span></button>
-          <button type="button" className="chrome-button chrome-button-danger" onClick={() => void evoca.quit()}><Icon name="power" /><span>Exit eVoca</span></button>
+      <div className="settings-topbar window-drag-handle">
+        <div className="settings-topbar-left">
+          <span className="brand-mark inline-flex items-center justify-center leading-none">✦</span>
+          <div className="settings-topbar-copy"><h1>Settings</h1><p>Shape how eVoca runs, stores data, and connects to models.</p></div>
+        </div>
+        <div className="settings-topbar-actions settings-actions">
+          <button type="button" className="chrome-button chrome-button-danger" onClick={() => void evoca.quit()}>Exit eVoca</button>
+          <button type="button" className="chrome-button" onClick={onClose}>Close</button>
         </div>
       </div>
 
       <div className="settings-tabs">
-        <button type="button" className={section === "general" ? "tab active" : "tab"} onClick={() => setSection("general")}>
-          General
-        </button>
-        <button type="button" className={section === "configurations" ? "tab active" : "tab"} onClick={() => setSection("configurations")}>
-          Configurations
-        </button>
-        <button type="button" className={section === "providers" ? "tab active" : "tab"} onClick={() => setSection("providers")}>
-          Providers
-        </button>
+        <button type="button" className={section === "general" ? "tab active" : "tab"} onClick={() => setSection("general")}>General</button>
+        <button type="button" className={section === "configurations" ? "tab active" : "tab"} onClick={() => setSection("configurations")}>Configurations</button>
+        <button type="button" className={section === "providers" ? "tab active" : "tab"} onClick={() => setSection("providers")}>Providers</button>
       </div>
 
-      {message && <div className="status-message">{message}</div>}
+      <div className="settings-workspace">
+        {message && <div className={`status-message mb-3 ${message.toLowerCase().includes("successful") || message.toLowerCase().includes("saved") || message.toLowerCase().includes("changed") || message.toLowerCase().includes("found") || message.toLowerCase().includes("added") ? "success" : ""}`}>{message}</div>}
 
-      {section === "general" ? (
-        <div className="settings-grid">
-          <div className="editor">
-            <div className="editor-heading">
-              <h3>Global hotkey</h3>
-              <span>Toggle overlay</span>
-            </div>
-            <p className="muted">Pressing this shortcut toggles eVoca between the tray and the foreground. It does not depend on mouse focus or outside clicks.</p>
-            <label>Hotkey
-              <select value={hotkey} onChange={async (e) => {
-                const value = e.target.value;
-                try {
-                  await evoca.setHotkey(value);
-                  setHotkey(value);
-                  setMessage(`Hotkey changed to ${value}.`);
-                } catch (error) {
-                  setMessage(`Hotkey change failed: ${String(error)}`);
-                }
-              }}>
-                <option>Ctrl+Space</option>
-                <option>Ctrl+Shift+Space</option>
-                <option>Alt+Space</option>
-                <option>Ctrl+Alt+Space</option>
-              </select>
-            </label>
-            <div className="status-message">Current: <code>{hotkey}</code></div>
-            <div className="editor-heading storage-heading">
-              <h3>Data storage</h3>
-              <span>Database & screenshot files</span>
-            </div>
-            <p className="muted">Choose where eVoca keeps its SQLite database and captured chat images. A restart is required after changing these paths so the application can reopen the database at the new location.</p>
-            {storage && (
-              <>
-                <label>Database path
-                  <input value={storage.databasePath} onChange={(e) => setStorage({ ...storage, databasePath: e.target.value })} />
-                </label>
-                <label>Chat images path
-                  <input value={storage.imagesPath} onChange={(e) => setStorage({ ...storage, imagesPath: e.target.value })} />
-                </label>
-                <button type="button" disabled={storageSaving} onClick={async () => {
-                  setStorageSaving(true);
-                  try {
-                    await evoca.setStorageSettings(storage);
-                    setMessage("Storage paths saved. Restart eVoca to apply the new database path.");
-                  } catch (error) {
-                    setMessage(`Storage settings failed: ${String(error)}`);
-                  } finally {
-                    setStorageSaving(false);
-                  }
-                }}>{storageSaving ? "Saving…" : "Save storage paths"}</button>
-              </>
-            )}
-          </div>
-        </div>
-      ) : section === "configurations" ? (
-        <div className="settings-grid">
-          <aside className="settings-sidebar">
-            <button type="button" className="side-row create-row" onClick={() => setConfiguration(freshConfiguration(providers))}>
-              ＋ New configuration
-            </button>
-            {configurations.map((s) => (
-              <button
-                type="button"
-                key={s.id}
-                className={configuration?.id === s.id ? "side-row active" : "side-row"}
-                onClick={() => setConfiguration(s)}
-              >
-                <span className="side-row-title">✦ {s.name}</span>
-                <small>{providers.find((p) => p.id === s.providerId)?.name || "No provider"} · {s.model || "No model"}</small>
-              </button>
-            ))}
-          </aside>
-
-          <div className="editor">
-            {configuration ? (
-              <>
-                <div className="editor-heading">
-                  <h3>Configuration</h3>
-                </div>
-                <label>Name<input value={configuration.name} onChange={e => setConfiguration({...configuration,name:e.target.value})}/></label>
-                <label>Description<input value={configuration.description ?? ""} onChange={e => setConfiguration({...configuration,description:e.target.value})}/></label>
-
+        {section === "general" ? (
+          <div className="settings-general-scroll">
+            <div className="editor-card">
+              <div className="editor-heading"><div><h3>General</h3><p className="mt-1.5 text-[9px] text-white/28">Global behavior and local storage for this installation.</p></div><span>LOCAL</span></div>
+              <div className="hotkey-card">
+                <div className="editor-section-head"><div><div className="section-title">Global hotkey</div><p>Toggle the launcher from anywhere in Windows.</p></div></div>
                 <div className="form-row">
-                  <label>Provider
-                    <select
-                      value={configuration.providerId}
-                      onChange={e => {
-                        const providerId = e.target.value;
-                        setConfiguration({ ...configuration, providerId, model: "" });
-                        setConfigurationModels([]);
-                      }}
-                    >
-                      <option value="">Select provider</option>
-                      {providers.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                  <label>Shortcut
+                    <select value={hotkey} onChange={async (e) => { const value = e.target.value; try { await evoca.setHotkey(value); setHotkey(value); setMessage(`Hotkey changed to ${value}.`); } catch (error) { setMessage(`Hotkey change failed: ${String(error)}`); } }}>
+                      <option>Ctrl+Space</option><option>Ctrl+Shift+Space</option><option>Alt+Space</option><option>Ctrl+Alt+Space</option>
                     </select>
+                    <span className="field-help">Escape dismisses the transient launcher views.</span>
                   </label>
-
-                  <label>Model
-                    <select
-                      value={configuration.model}
-                      disabled={!configuration.providerId}
-                      onChange={e => setConfiguration({...configuration,model:e.target.value})}
-                    >
-                      <option value="">Select model</option>
-                      {configuration.model && !configurationModels.some(m => m.name === configuration.model) && (
-                        <option value={configuration.model}>{configuration.model} (saved)</option>
-                      )}
-                      {configurationModels.map(m => (
-                        <option key={m.id} value={m.name}>{m.displayName || m.name}</option>
-                      ))}
-                    </select>
-                  </label>
+                  <div className="setting-value-line self-end"><span>Current</span><code>{hotkey}</code></div>
                 </div>
+              </div>
 
-                <label>System Prompt<textarea value={configuration.spell} onChange={e => setConfiguration({...configuration,spell:e.target.value})}/></label>
-
-                <div className="form-row">
-                  <label>Temperature<input type="number" step="0.1" min="0" max="2" value={configuration.temperature ?? 0.2} onChange={e => setConfiguration({...configuration,temperature:Number(e.target.value)})}/></label>
-                  <label>Max tokens<input type="number" min="1" value={configuration.maxTokens ?? 2000} onChange={e => setConfiguration({...configuration,maxTokens:Number(e.target.value)})}/></label>
+              <div className="editor-section">
+                <div className="editor-section-head"><div><div className="section-title">Data storage</div><p>SQLite database and captured screenshot files.</p></div><span className="text-[8px] text-white/22">Restart after path changes</span></div>
+                <div className="storage-card">
+                  <p className="muted mb-4">Choose where eVoca keeps its local database and chat images. Changing these paths is persisted immediately, but the new database location is picked up after restart.</p>
+                  {storage && <div className="space-y-3">
+                    <label>Database path<input value={storage.databasePath} onChange={(e) => setStorage({ ...storage, databasePath: e.target.value })} /></label>
+                    <label>Chat images path<input value={storage.imagesPath} onChange={(e) => setStorage({ ...storage, imagesPath: e.target.value })} /></label>
+                    <div className="editor-footer"><small>Local files only · no account required</small><button type="button" className="primary" disabled={storageSaving} onClick={async () => { setStorageSaving(true); try { await evoca.setStorageSettings(storage); setMessage("Storage paths saved. Restart eVoca to apply the new database path."); } catch (error) { setMessage(`Storage settings failed: ${String(error)}`); } finally { setStorageSaving(false); } }}>{storageSaving ? "Saving…" : "Save paths"}</button></div>
+                  </div>}
                 </div>
-
-                <div className="footer settings-actions">
-                  <button type="button" className="chrome-button chrome-button-danger" onClick={async () => {
-                    await evoca.deleteConfiguration(configuration.id);
-                    const next = await evoca.getConfigurations();
-                    onChange(next);
-                    setConfiguration(next[0] ?? null);
-                  }}><Icon name="trash" /><span>Delete</span></button>
-                  <button type="button" className="action-button" disabled={saving} onClick={() => void saveConfiguration()}>
-  <Icon name="save" /><span>{saving ? "Saving..." : "Save configuration"}</span>
-</button>
-                </div>
-              </>
-            ) : <div className="empty-state">Create your first configuration.</div>}
+              </div>
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="settings-grid">
-          <aside className="settings-sidebar">
-            <button type="button" className="side-row create-row" onClick={addProvider}>
-              ＋ Add provider
-            </button>
+        ) : section === "configurations" ? (
+          <div className="settings-grid">
+            <aside className="settings-sidebar">
+              <div className="settings-list-header"><span>Configurations</span><span>{configurations.length}</span></div>
+              <button type="button" className="side-row create-row" onClick={() => setConfiguration(freshConfiguration(providers))}><span className="side-row-title"><span className="side-icon">＋</span>New configuration</span></button>
+              {configurations.map((s) => <button type="button" key={s.id} className={configuration?.id === s.id ? "side-row active" : "side-row"} onClick={() => setConfiguration(s)}><span className="side-row-title"><span className="side-icon">{s.icon || "✦"}</span>{s.name}</span><small>{providers.find((p) => p.id === s.providerId)?.name || "No provider"} · {s.model || "No model"}</small></button>)}
+            </aside>
 
-            {providers.map(r => (
-              <button
-                type="button"
-                key={r.id}
-                className={provider?.id === r.id ? "side-row active" : "side-row"}
-                onClick={() => {
-                  setProvider(r);
-                  setDiscoveredModels([]);
-                  setSection("providers");
-                  setMessage("");
-                }}
-              >
-                {r.name}
-              </button>
-            ))}
-          </aside>
-
-          <div className="editor">
-            {provider ? (
-              <>
-                <div className="editor-heading">
-                  <h3>{provider.name}</h3>
-                  <span>{providers.some((item) => item.id === provider.id) ? "Saved" : "New"}</span>
-                </div>
-
-                <div className="provider-actions">
-                  <button type="button" className="secondary" disabled={providerTesting} onClick={() => void testProvider()}>
-                    {providerTesting ? "Testing…" : "Test provider"}
-                  </button>
-                  <button type="button" className="secondary" disabled={discoveringModels} onClick={() => void discoverModels()}>
-                    {discoveringModels ? "Loading models…" : "Discover models"}
-                  </button>
-                </div>
-
-                <label>Provider name<input value={provider.name} onChange={e => setProvider({...provider,name:e.target.value})}/></label>
-
+            <div className="settings-editor">
+              {configuration ? <div className="editor-card">
+                <div className="editor-heading"><div><h3>{configuration.name || "Configuration"}</h3><p className="mt-1.5 text-[9px] text-white/28">A reusable workflow from input to model result.</p></div><span>CONFIGURATION</span></div>
                 <div className="form-row">
-                  <label>Type<select value={provider.kind} onChange={e => setProvider({...provider,kind:e.target.value})}>
-                    <option value="openai_compatible">OpenAI compatible</option>
-                    <option value="ollama">Ollama</option>
-                  </select></label>
-
-                  <label>Base URL<input value={provider.baseUrl ?? ""} onChange={e => setProvider({...provider,baseUrl:e.target.value})}/></label>
+                  <label>Name<input value={configuration.name} onChange={e => setConfiguration({...configuration,name:e.target.value})}/></label>
+                  <label>Description<input value={configuration.description ?? ""} placeholder="What is this workflow for?" onChange={e => setConfiguration({...configuration,description:e.target.value})}/></label>
                 </div>
-
                 <div className="form-row">
-                  <label>Credential reference<input value={provider.credentialRef ?? ""} onChange={e => setProvider({...provider,credentialRef:e.target.value})}/></label>
-                  <label>API key environment variable<input value={provider.apiKeyEnv ?? ""} placeholder="EVOCA_MY_PROVIDER_KEY" onChange={e => setProvider({...provider,apiKeyEnv:e.target.value})}/></label>
+                  <label>Provider<select value={configuration.providerId} onChange={e => { const providerId = e.target.value; setConfiguration({ ...configuration, providerId, model: "" }); setConfigurationModels([]); }}><option value="">Select provider</option>{providers.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
+                  <label>Model<select value={configuration.model} disabled={!configuration.providerId} onChange={e => setConfiguration({...configuration,model:e.target.value})}><option value="">Select model</option>{configuration.model && !configurationModels.some(m => m.name === configuration.model) && <option value={configuration.model}>{configuration.model} (saved)</option>}{configurationModels.map(m => <option key={m.id} value={m.name}>{m.displayName || m.name}</option>)}</select></label>
                 </div>
-
-                <label>Custom headers (JSON)<textarea value={provider.headersJson ?? "{}"} onChange={e => setProvider({...provider,headersJson:e.target.value})}/></label>
+                <label>System Prompt<textarea className="min-h-[240px]" value={configuration.spell} onChange={e => setConfiguration({...configuration,spell:e.target.value})}/><span className="field-help">This prompt is sent as the reusable system instruction for every run.</span></label>
+                <div className="editor-section">
+                  <div className="editor-section-head"><div><div className="section-title">Generation</div><p>Keep these values close to the task rather than the provider.</p></div></div>
+                  <div className="form-row"><label>Temperature<input type="number" step="0.1" min="0" max="2" value={configuration.temperature ?? 0.2} onChange={e => setConfiguration({...configuration,temperature:Number(e.target.value)})}/></label><label>Max tokens<input type="number" min="1" value={configuration.maxTokens ?? 2000} onChange={e => setConfiguration({...configuration,maxTokens:Number(e.target.value)})}/></label></div>
+                </div>
+                <div className="editor-footer"><button type="button" className="button danger" onClick={async () => { await evoca.deleteConfiguration(configuration.id); const next = await evoca.getConfigurations(); onChange(next); setConfiguration(next[0] ?? null); }}>Delete</button><div className="settings-actions"><small>{configuration.providerId ? "Ready to save" : "Select a provider and model"}</small><button type="button" className="primary button" disabled={saving} onClick={() => void saveConfiguration()}>{saving ? "Saving…" : "Save configuration"}</button></div></div>
+              </div> : <div className="editor-card empty-state">Create a configuration from the left panel to begin.</div>}
+            </div>
+          </div>
+        ) : (
+          <div className="settings-grid">
+            <aside className="settings-sidebar">
+              <div className="settings-list-header"><span>Providers</span><span>{providers.length}</span></div>
+              <button type="button" className="side-row create-row" onClick={addProvider}><span className="side-row-title"><span className="side-icon">＋</span>Add provider</span></button>
+              {providers.map(r => <button type="button" key={r.id} className={provider?.id === r.id ? "side-row active" : "side-row"} onClick={() => { setProvider(r); setDiscoveredModels([]); setSection("providers"); setMessage(""); }}><span className="side-row-title"><span className="side-icon">⌁</span>{r.name}</span><small>{r.kind === "ollama" ? "Ollama" : "OpenAI compatible"}</small></button>)}
+            </aside>
+            <div className="settings-editor">
+              {provider ? <div className="editor-card">
+                <div className="editor-heading"><div><h3>{provider.name}</h3><p className="mt-1.5 text-[9px] text-white/28">Connection details, credentials references, and models.</p></div><span>{providers.some((item) => item.id === provider.id) ? "SAVED" : "NEW"}</span></div>
+                <div className="provider-actions mb-4"><button type="button" disabled={providerTesting} onClick={() => void testProvider()}>{providerTesting ? "Testing…" : "Test connection"}</button><button type="button" disabled={discoveringModels} onClick={() => void discoverModels()}>{discoveringModels ? "Discovering…" : "Discover models"}</button></div>
+                <div className="form-row"><label>Provider name<input value={provider.name} onChange={e => setProvider({...provider,name:e.target.value})}/></label><label>Type<select value={provider.kind} onChange={e => setProvider({...provider,kind:e.target.value})}><option value="openai_compatible">OpenAI compatible</option><option value="ollama">Ollama</option></select></label></div>
+                <label>Base URL<input value={provider.baseUrl ?? ""} onChange={e => setProvider({...provider,baseUrl:e.target.value})}/></label>
+                <div className="form-row"><label>Credential reference<input value={provider.credentialRef ?? ""} onChange={e => setProvider({...provider,credentialRef:e.target.value})}/></label><label>API key environment variable<input value={provider.apiKeyEnv ?? ""} placeholder="EVOCA_MY_PROVIDER_KEY" onChange={e => setProvider({...provider,apiKeyEnv:e.target.value})}/></label></div>
+                <label>Custom headers (JSON)<textarea className="min-h-[120px]" value={provider.headersJson ?? "{}"} onChange={e => setProvider({...provider,headersJson:e.target.value})}/></label>
 
                 <div className="models-section">
-                  <div className="section-title">Models</div>
-                  <div className="model-add-row">
-                    <input placeholder="Model ID" value={modelName} onChange={e => setModelName(e.target.value)}/>
-                    <input placeholder="Display name" value={modelLabel} onChange={e => setModelLabel(e.target.value)}/>
-                    <button type="button" className="secondary" disabled={!modelName.trim()} onClick={() => void addModel()}>Add</button>
-                  </div>
-
-                  <div className="model-list">
-                    {models.filter(Boolean).map(m => (
-                      <div className="model-row" key={m.id}>
-                        <span>{m.displayName?.trim() || m.name}</span>
-                        <code>{m.name}</code>
-                        <button type="button" className="text-button" onClick={() => void deleteModel(m.id)}>Remove</button>
-                      </div>
-                    ))}
-                  </div>
-
-                  {discoveredModels.length > 0 && (
-                    <div className="discovered-models">
-                      <div className="section-title">Available from provider</div>
-                      <div className="model-list">
-                        {discoveredModels.map(m => (
-                          <div className="model-row" key={m.id}>
-                            <span>{m.displayName?.trim() || m.name}</span>
-                            <code>{m.name}</code>
-                            <button type="button" className="text-button" onClick={() => void addDiscoveredModel(m)}>Add</button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <div className="editor-section-head"><div><div className="section-title">Models</div><p>Add local model aliases or import what the provider exposes.</p></div><span className="text-[8px] text-white/22">{models.length} saved</span></div>
+                  <div className="model-add-row"><input placeholder="Model ID" value={modelName} onChange={e => setModelName(e.target.value)}/><input placeholder="Display name" value={modelLabel} onChange={e => setModelLabel(e.target.value)}/><button type="button" className="button primary" disabled={!modelName.trim()} onClick={() => void addModel()}>Add</button></div>
+                  <div className="model-list">{models.filter(Boolean).map(m => <div className="model-row" key={m.id}><span>{m.displayName?.trim() || m.name}</span><code>{m.name}</code><button type="button" className="text-button" onClick={() => void deleteModel(m.id)}>Remove</button></div>)}</div>
+                  {discoveredModels.length > 0 && <div className="discovered-models"><div className="section-title">Available from provider</div><div className="model-list">{discoveredModels.map(m => <div className="model-row" key={m.id}><span>{m.displayName?.trim() || m.name}</span><code>{m.name}</code><button type="button" className="text-button" onClick={() => void addDiscoveredModel(m)}>Add</button></div>)}</div></div>}
                 </div>
-
-                <div className="footer">
-                  <button type="button" className="danger" onClick={() => void deleteProvider()}>Delete provider</button>
-                  <button type="button" className="primary" disabled={saving} onClick={() => void saveProvider()}>
-  {saving ? "Saving..." : "Save provider"}
-</button>
-                </div>
-              </>
-            ) : (
-              <div className="empty-state">Click “Add provider” to create one.</div>
-            )}
+                <div className="editor-footer"><button type="button" className="button danger" onClick={() => void deleteProvider()}>Delete provider</button><button type="button" className="primary button" disabled={saving} onClick={() => void saveProvider()}>{saving ? "Saving…" : "Save provider"}</button></div>
+              </div> : <div className="editor-card empty-state">Add a provider from the left panel to connect eVoca to an LLM backend.</div>}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </section>
   );
 }
