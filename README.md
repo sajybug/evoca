@@ -1,58 +1,109 @@
 # eVoca
 
-eVoca is a system-tray AI assistant that provides quick access to pre-configured AI templates using a global hotkey.
+**eVoca is a Windows-first launcher for reusable AI configurations.**
 
-### How it works
-1. **Trigger:** Press your configured global hotkey.
-2. **Select:** A window appears with your saved templates.
-3. **Chat:** Select a template to start an AI conversation with a pre-set system prompt.
+Press a global hotkey, pick a configuration, enter your input, and get the result without leaving the application you are working in.
 
-### Features
-* **Global Hotkey:** Access the app from any window.
-* **Template System:** Store custom system prompts for different tasks (e.g., coding, translation, summarizing).
-* **System Tray:** Runs in the background with minimal overhead.
-* **Focus:** Designed for quick interaction without leaving your current workspace.
+> **Status:** `v0.1.0` — early open-source release.
 
-## Stack
+## What eVoca does
 
-- Wails v2.13.0
-- Go
-- React + TypeScript + Vite
-- SQLite via `modernc.org/sqlite`
-- Global hotkey via `golang.design/x/hotkey`
-- WebView2 on Windows
+```text
+Global Hotkey
+     ↓
+Configurations
+     ↓
+Input
+     ↓
+LLM Provider
+     ↓
+Result
+```
 
-## Product terminology
+eVoca is intentionally focused. It is not a general-purpose chat client and does not try to be one.
 
-The user-facing UI deliberately uses standard productivity terminology:
+## Features
 
-- Configuration
-- Provider
-- Model
-- System Prompt
-- Settings
-- Run
-- Result
-- History
+- Global `Ctrl + Space` launcher.
+- Searchable, reusable AI configurations.
+- Configurable system prompts, temperature, and max tokens.
+- Provider and model management.
+- OpenAI-compatible and Ollama providers.
+- Execution history stored locally in SQLite.
+- Screenshot capture and preview workflow.
+- System-tray operation.
+- Go backend with a React + TypeScript frontend connected through Wails.
 
-The magical identity of the project is branding only and should not add cognitive load to daily use.
+## Screenshots
 
-## MVP features in this version
+### Launcher
 
-- Ctrl+Space overlay.
-- Searchable configuration list.
-- Create a new configuration.
-- Edit an existing configuration.
-- Select provider and model.
-- Define System Prompt.
-- Configure temperature and max tokens.
-- Save/delete configurations in SQLite.
-- Run a configuration against the configured LLM.
-- Copy the result.
-- Explicit `Exit eVoca` action from Settings.
-- OpenAI-compatible and Ollama provider abstractions.
+![eVoca launcher](assets/screenshots/launcher.png)
 
-## Configuration model
+### Configuration editor
+
+![Configuration editor](assets/screenshots/configuration-editor.png)
+
+### Provider settings
+
+![Provider settings](assets/screenshots/providers.png)
+
+## Platform
+
+eVoca currently targets **Windows 10/11** and uses WebView2 for the application UI.
+
+Cross-platform support is not a current project goal.
+
+## Installation
+
+Download the latest Windows release from **GitHub Releases** and run `eVoca.exe`.
+
+For source-based development, see the section below.
+
+## Development
+
+### Prerequisites
+
+- Windows 10/11.
+- Go 1.25 or newer.
+- Node.js and npm.
+- WebView2 runtime.
+
+### Run the frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### Build the frontend
+
+```bash
+cd frontend
+npm install
+npm run build
+```
+
+### Run the Wails application
+
+Install the Wails v2 CLI, then from the repository root run:
+
+```bash
+wails dev
+```
+
+To create a Windows production build:
+
+```bash
+wails build
+```
+
+The project uses Wails v2 and keeps the frontend and backend responsibilities intentionally separate.
+
+## Configuration and providers
+
+A **Configuration** defines how an LLM request should be run:
 
 ```text
 Configuration
@@ -64,84 +115,87 @@ Configuration
 ├── Input Type
 ├── Output Type
 ├── Temperature
-├── Max Tokens
-└── Future: Shortcut / Input Source / Output Target
+└── Max Tokens
 ```
+
+Providers are first-class objects. A provider can define its name, type, base URL, credential reference, credential environment variable, custom headers, and available models.
+
+Configure providers from **Settings → Providers → Add provider**.
+
+## Credentials
+
+eVoca does not store raw API keys in ordinary SQLite configuration data.
+
+The current MVP uses environment variables as a temporary credential mechanism. Windows secure credential storage is planned for a future release.
+
+Never commit API keys or other secrets to the repository.
+
+## Data storage
+
+SQLite is used as the local source of truth for application data such as providers, configurations, executions, and settings.
+
+Data remains local unless a provider request is made explicitly by the user.
 
 ## Architecture
 
 ```text
 Windows
   │
-  ├── Ctrl + Space
+  ├── Global Hotkey
   │
   ▼
 Wails Window
   │
-  ▼
-React / TypeScript
+  ├── React / TypeScript UI
   │
-  └── Generated Wails bindings
-          │
-          ▼
-        Go App
-        ├── SQLite
-        ├── Hotkey
-        ├── LLM Registry
-        └── Credentials abstraction
-               ├── OpenAI-compatible
-               └── Ollama
+  ▼
+Go Application
+  ├── SQLite
+  ├── Hotkey manager
+  ├── Provider registry
+  ├── LLM clients
+  └── Credentials abstraction
 ```
 
-The frontend does not call LLM providers directly. All provider calls go through Go.
+The frontend does not call LLM providers directly. Provider requests are handled by Go.
 
-## Secrets
+## Project structure
 
-The current MVP keeps credential references separate from SQLite data and uses environment variables for the temporary OpenAI credential path. Production should use Windows secure credential storage.
+```text
+.
+├── backend/
+│   ├── credentials/
+│   ├── db/
+│   ├── hotkey/
+│   └── llm/
+├── frontend/
+│   └── src/
+├── app.go
+├── main.go
+├── screenshot.go
+├── tray.go
+├── go.mod
+└── wails.json
+```
 
-## Exit behavior
+The root-level Go files intentionally remain in the main package because they are part of the Wails application entrypoint and embed application resources directly.
 
-Wails v2 exposes `runtime.Quit(ctx)` for graceful application termination. eVoca exposes this through the Settings screen as `Exit eVoca`.
+## Contributing
 
-## Post-MVP
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the current contribution workflow.
 
-- Windows text selection capture.
-- Replace-selection / paste output.
-- Per-configuration shortcuts.
-- Windows Credential Manager.
-- Tray UI.
-- Structured output.
-- More providers.
-- Input/output adapters.
+The project intentionally keeps its scope small. Avoid adding agents, MCP, RAG, accounts, cloud sync, marketplace features, or other large subsystems without an explicit product decision.
 
-Do not add agents, MCP, RAG, accounts, cloud sync, or marketplace features until the core launcher is solid.
+## Versioning
 
+eVoca uses semantic versioning for releases.
 
-## Providers
+The current open-source baseline is **`v0.1.0`**.
 
-Providers are first-class objects and are managed separately from Configurations.
+## About the Name
 
-A provider can define:
-
-- name
-- type (`OpenAI compatible` or `Ollama`)
-- base URL
-- credential reference
-- environment variable used for credentials
-- custom HTTP headers
-- a list of models
-
-A Configuration selects exactly one Provider and one of its registered Models.
-
-This makes custom endpoints and OpenAI-compatible services first-class instead of hard-coding a small provider list.
-
-
-## Provider workflow
-
-Use **Settings → Providers → Add provider**. A new provider appears immediately in the editor; enter its endpoint and credentials reference, add one or more models, then press **Save provider**.
-
-
-Save operations validate required fields and surface backend errors directly in Settings instead of failing silently.
-
-### About the Name
 The name **eVoca** is derived from the Latin *evocare* (to call forth), chosen to describe the app's function of quickly calling up specific AI configurations.
+
+## License
+
+eVoca is licensed under the [MIT License](LICENSE).
