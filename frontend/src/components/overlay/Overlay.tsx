@@ -32,9 +32,14 @@ export function Overlay({ configurations, onOpenSettings, onOpenHistory, provide
   const dragStart = useRef<Point | null>(null);
   const streamCleanup = useRef<(() => void) | null>(null);
   const activeRequestId = useRef<string | null>(null);
+  const [hotkey, setHotkey] = useState("Ctrl+Space");
 
   const filtered = useMemo(() => configurations.filter((x) => `${x.name} ${x.description ?? ""} ${x.model}`.toLowerCase().includes(query.toLowerCase())), [configurations, query]);
   const selected = configurations.find((x) => x.id === state.selected);
+
+  useEffect(() => {
+    evoca.getHotkey().then((value) => setHotkey(value || "Ctrl+Space")).catch(() => setHotkey("Ctrl+Space"));
+  }, []);
 
   useEffect(() => {
     if (!loadingStartedAt || !streaming) { setLoadingElapsedMs(0); return; }
@@ -196,7 +201,7 @@ export function Overlay({ configurations, onOpenSettings, onOpenHistory, provide
             </button>;
           }) : <div className="flex min-h-[160px] flex-1 items-center justify-center text-center text-[10px] text-white/28">No configurations match “{query}”.</div>}
         </div>
-        <div className="mt-3 flex items-center justify-between"><span className="text-[9px] text-white/24">Reusable AI workflows, not a chat inbox.</span><div className="flex items-center gap-1.5"><kbd className="rounded-[6px] border border-white/[.08] bg-white/[.025] px-1.5 py-1 font-mono text-[8px] text-white/33">Ctrl + Space</kbd><span className="text-[9px] text-white/24">Open</span><kbd className="rounded-[6px] border border-white/[.08] bg-white/[.025] px-1.5 py-1 font-mono text-[8px] text-white/33">Esc</kbd><span className="text-[9px] text-white/24">Close</span></div></div>
+        <div className="mt-3 flex items-center justify-between"><span className="text-[9px] text-white/24">Reusable AI workflows, not a chat inbox.</span><div className="flex items-center gap-1.5"><kbd className="rounded-[6px] border border-white/[.08] bg-white/[.025] px-1.5 py-1 font-mono text-[8px] text-white/33">{hotkey}</kbd><span className="text-[9px] text-white/24">Toggle</span></div></div>
       </div>
     </section>
   );
