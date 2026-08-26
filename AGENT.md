@@ -387,10 +387,19 @@ Phase 9 -> Tailwind v4 UI rebuild -> Done
 Phase 10 -> Full Frontend Redesign -> Done
 Phase 11 -> Full Tailwind utility migration -> Done
 Phase 12 -> Storage picker, history deletion, backup/restore & request cancellation -> Done
-Phase 13 -> Windows startup, provider persistence, scalable dropdowns & secure credentials -> Done
+Phase 13 -> Windows startup, provider persistence, scalable dropdowns & secure credentials, Tray click behavior -> Done
+Phase 14 —> Screenshot capture compositor timing fix & DWM cloak -> Done
 ```
 
 The exact next Phase may change; when it does, update the roadmap rather than keeping contradictory plans.
+
+### Phase 14 — Screenshot capture compositor timing fix & DWM cloak
+
+- Hardened the screenshot capture transition by hiding the native eVoca window synchronously before the desktop capture begins.
+- The first implementation relied on HWND visibility plus a compositor delay; this was superseded in Phase 15 because DWM can retain the previous transparent/frameless surface after the window becomes hidden.
+- Fixed desktop screenshot contamination by cloaking the eVoca HWND with `DWMWA_CLOAK` before the native `BitBlt` capture, removing the stale Wails surface from Desktop Window Manager composition rather than relying on timing alone.
+- Flushes DWM while the window is cloaked, captures the desktop, then un-cloaks eVoca before opening the fullscreen screenshot selector.
+- Kept screenshot selection, preview, confirmation, and restore flows unchanged.
 
 ### Phase entry format
 

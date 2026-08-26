@@ -110,14 +110,27 @@ func (a *App) BeginScreenshot() (string, error) {
 		return "", fmt.Errorf("app is not initialized")
 	}
 	// Hide eVoca before capture so its own window is never included in the image.
+	// The native hide is deliberately synchronized with the Windows compositor;
+	// runtime.WindowHide alone can leave one transitional/blurred frame visible
+	// long enough for BitBlt to capture it.
 	a.HideOverlay()
-	time.Sleep(120 * time.Millisecond)
-	pngData, err := capturePrimaryScreen()
-	if err != nil {
+	if err := hideScreenshotWindowForCapture(); err != nil {
+		_ = uncloakScreenshotWindow()
 		runtime.WindowShow(a.ctx)
 		a.overlayVisible = true
 		return "", err
 	}
+	pngData, err := capturePrimaryScreen()
+	if err != nil {
+		_ = uncloakScreenshotWindow()
+		runtime.WindowShow(a.ctx)
+		a.overlayVisible = true
+		return "", err
+	}
+	// The capture is complete; restore DWM composition before showing the
+	// interactive fullscreen screenshot selector. The captured PNG is already
+	// isolated from eVoca.
+	_ = uncloakScreenshotWindow()
 	a.screenshotMu.Lock()
 	a.screenshotPNG = pngData
 	a.screenshotMu.Unlock()
