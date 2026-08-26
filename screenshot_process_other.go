@@ -2,6 +2,8 @@
 
 package main
 
-import "os/exec"
+import "fmt"
 
-func hideConsoleWindow(cmd *exec.Cmd) {}
+func capturePrimaryScreen() ([]byte, error) {
+	return nil, fmt.Errorf("screenshot capture is currently supported on Windows only")
+}

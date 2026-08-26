@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/evoca-dev/evoca/backend/credentials"
 	"github.com/evoca-dev/evoca/backend/db"
 	"github.com/evoca-dev/evoca/backend/hotkey"
 	"github.com/evoca-dev/evoca/backend/llm"
@@ -17,19 +18,20 @@ import (
 )
 
 type App struct {
-	ctx            context.Context
-	database       *db.DB
-	providers      *llm.Registry
-	hotkey         *hotkey.Manager
-	overlayVisible bool
-	streamMu       sync.Mutex
-	streams        map[string]context.CancelFunc
-	screenshotMu   sync.Mutex
-	screenshotPNG  []byte
+	ctx             context.Context
+	database        *db.DB
+	providers       *llm.Registry
+	hotkey          *hotkey.Manager
+	overlayVisible  bool
+	streamMu        sync.Mutex
+	streams         map[string]context.CancelFunc
+	screenshotMu    sync.Mutex
+	screenshotPNG   []byte
+	credentialStore credentials.CredentialStore
 }
 
 func NewApp() *App {
-	return &App{streams: make(map[string]context.CancelFunc)}
+	return &App{streams: make(map[string]context.CancelFunc), credentialStore: credentials.NewWindowsStore()}
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -340,6 +342,42 @@ func (a *App) DeleteConfiguration(id string) error {
 	return a.database.DeleteConfiguration(id)
 }
 
+func (a *App) IsAutostartEnabled() (bool, error) {
+	return isAutostartEnabled()
+}
+
+func (a *App) SetAutostart(enabled bool) error {
+	return setAutostartEnabled(enabled)
+}
+
+func (a *App) HasProviderCredential(ref string) bool {
+	ref = strings.TrimSpace(ref)
+	if ref == "" || a.credentialStore == nil {
+		return false
+	}
+	value, err := a.credentialStore.Get(ref)
+	return err == nil && value != ""
+}
+
+func (a *App) SetProviderCredential(ref, value string) error {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return fmt.Errorf("credential reference is required")
+	}
+	if a.credentialStore == nil {
+		return fmt.Errorf("credential store is not initialized")
+	}
+	return a.credentialStore.Set(ref, value)
+}
+
+func (a *App) DeleteProviderCredential(ref string) error {
+	ref = strings.TrimSpace(ref)
+	if ref == "" || a.credentialStore == nil {
+		return nil
+	}
+	return a.credentialStore.Delete(ref)
+}
+
 func (a *App) GetProviders() ([]db.Provider, error) {
 	if a.database == nil {
 		return nil, fmt.Errorf("database is not initialized")
@@ -367,21 +405,31 @@ func (a *App) DeleteProvider(id string) error {
 	if a.database == nil {
 		return fmt.Errorf("database is not initialized")
 	}
-	return a.database.DeleteProvider(id)
+	provider, err := a.database.GetProvider(id)
+	if err != nil {
+		return err
+	}
+	if err := a.database.DeleteProvider(id); err != nil {
+		return err
+	}
+	if a.credentialStore != nil && strings.TrimSpace(provider.CredentialRef) != "" {
+		_ = a.credentialStore.Delete(provider.CredentialRef)
+	}
+	return nil
 }
 
 func (a *App) TestProvider(provider db.Provider) error {
 	if a.providers == nil {
 		return fmt.Errorf("provider registry is not initialized")
 	}
-	return llm.TestProvider(provider)
+	return llm.TestProvider(provider, a.credentialStore)
 }
 
 func (a *App) DiscoverProviderModels(provider db.Provider) ([]db.ProviderModel, error) {
 	if a.providers == nil {
 		return nil, fmt.Errorf("provider registry is not initialized")
 	}
-	discovered, err := llm.DiscoverModels(provider)
+	discovered, err := llm.DiscoverModels(provider, a.credentialStore)
 	if err != nil {
 		return nil, err
 	}

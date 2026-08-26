@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Provider, ProviderModel, Configuration, StorageSettings } from "../../types/domain";
 import { evoca } from "../../services/evoca";
 import { ConfirmModal } from "../common/ConfirmModal";
+import { SearchableSelect } from "../common/SearchableSelect";
 
 interface Props {
   configurations: Configuration[];
@@ -91,7 +92,7 @@ const freshProvider = (): Provider => ({
   name: "New Provider",
   kind: "openai_compatible",
   baseUrl: "https://api.openai.com/v1",
-  credentialRef: "",
+  credentialRef: `provider_${crypto.randomUUID()}`,
   apiKeyEnv: "",
   headersJson: "{}",
   createdAt: 0,
@@ -115,6 +116,9 @@ export function Settings({ configurations, onChange, onClose }: Props) {
   const [storage, setStorage] = useState<StorageSettings | null>(null);
   const [storageSaving, setStorageSaving] = useState(false);
   const [backupBusy, setBackupBusy] = useState(false);
+  const [providerCredential, setProviderCredential] = useState("");
+  const [credentialSaved, setCredentialSaved] = useState(false);
+  const [credentialBusy, setCredentialBusy] = useState(false);
   const [confirm, setConfirm] = useState<{ kind: "configuration" | "provider" | "model" | "restore"; id?: string } | null>(null);
 
   useEffect(() => {
@@ -175,6 +179,15 @@ export function Settings({ configurations, onChange, onClose }: Props) {
   }, [configuration?.providerId]);
 
   useEffect(() => {
+    setProviderCredential("");
+    setCredentialSaved(false);
+    if (!provider?.credentialRef || !providers.some((item) => item.id === provider.id)) return;
+    let active = true;
+    evoca.hasProviderCredential(provider.credentialRef).then((saved) => { if (active) setCredentialSaved(saved); }).catch(() => { if (active) setCredentialSaved(false); });
+    return () => { active = false; };
+  }, [provider?.credentialRef, provider?.id, providers]);
+
+  useEffect(() => {
     // Do not hit the DB for a brand-new unsaved provider.
     if (!provider || !providers.some((item) => item.id === provider.id)) {
       setModels([]);
@@ -202,6 +215,31 @@ export function Settings({ configurations, onChange, onClose }: Props) {
     setModelName("");
     setModelLabel("");
     setSection("providers");
+  }
+
+  async function saveProviderCredential() {
+    if (!provider || !provider.credentialRef) { setMessage("Credential reference is required."); return; }
+    if (!providerCredential) { setMessage("Enter an API key first."); return; }
+    setCredentialBusy(true);
+    try {
+      await evoca.setProviderCredential(provider.credentialRef, providerCredential);
+      setProviderCredential("");
+      setCredentialSaved(true);
+      setMessage("API key stored in Windows Credential Manager.");
+    } catch (error) { setMessage(`Store credential failed: ${String(error)}`); }
+    finally { setCredentialBusy(false); }
+  }
+
+  async function removeProviderCredential() {
+    if (!provider?.credentialRef) return;
+    setCredentialBusy(true);
+    try {
+      await evoca.deleteProviderCredential(provider.credentialRef);
+      setCredentialSaved(false);
+      setProviderCredential("");
+      setMessage("Stored API key removed.");
+    } catch (error) { setMessage(`Remove credential failed: ${String(error)}`); }
+    finally { setCredentialBusy(false); }
   }
 
   async function saveProvider() {
@@ -414,9 +452,7 @@ export function Settings({ configurations, onChange, onClose }: Props) {
                 <div className="mb-3 flex items-center justify-between"><div><div className={settingsSectionMetaClass}>Global hotkey</div><p className={settingsBodyClass}>Toggle the launcher from anywhere in Windows.</p></div></div>
                 <div className="grid grid-cols-2 gap-3">
                   <label className={settingsLabelClass}>Shortcut
-                    <select className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25 [color-scheme:dark] [&>option]:bg-[#12151a] [&>option]:text-white" value={hotkey} onChange={async (e) => { const value = e.target.value; try { await evoca.setHotkey(value); setHotkey(value); setMessage(`Hotkey changed to ${value}.`); } catch (error) { setMessage(`Hotkey change failed: ${String(error)}`); } }}>
-                      <option>Ctrl+Space</option><option>Ctrl+Shift+Space</option><option>Alt+Space</option><option>Ctrl+Alt+Space</option>
-                    </select>
+                    <SearchableSelect value={hotkey} options={["Ctrl+Space","Ctrl+Shift+Space","Alt+Space","Ctrl+Alt+Space"].map(value => ({value,label:value}))} onChange={async (value) => { try { await evoca.setHotkey(value); setHotkey(value); setMessage(`Hotkey changed to ${value}.`); } catch (error) { setMessage(`Hotkey change failed: ${String(error)}`); } }} />
                     <span className="mt-1.5 text-[8px] leading-4 text-white/23">Escape dismisses the transient launcher views.</span>
                   </label>
                   <div className="mt-5 my-auto flex items-center justify-between rounded-[10px] border border-white/[.05] bg-black/15 px-3 py-2.5 self-end text-[9px] text-white/35"><span>Current</span><code className="rounded-[6px] border border-white/[.08] bg-white/[.025] px-1.5 py-1 font-mono text-[8px] text-white/33">{hotkey}</code></div>
@@ -463,8 +499,8 @@ export function Settings({ configurations, onChange, onClose }: Props) {
                   <label className={settingsLabelClass}>Description<input className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25" value={configuration.description ?? ""} placeholder="What is this workflow for?" onChange={e => setConfiguration({...configuration,description:e.target.value})}/></label>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <label className={settingsLabelClass}>Provider<select className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25 [color-scheme:dark] [&>option]:bg-[#12151a] [&>option]:text-white" value={configuration.providerId} onChange={e => { const providerId = e.target.value; setConfiguration({ ...configuration, providerId, model: "" }); setConfigurationModels([]); }}><option value="">Select provider</option>{providers.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
-                  <label className={settingsLabelClass}>Model<select className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25 [color-scheme:dark] [&>option]:bg-[#12151a] [&>option]:text-white" value={configuration.model} disabled={!configuration.providerId} onChange={e => setConfiguration({...configuration,model:e.target.value})}><option value="">Select model</option>{configuration.model && !configurationModels.some(m => m.name === configuration.model) && <option value={configuration.model}>{configuration.model} (saved)</option>}{configurationModels.map(m => <option key={m.id} value={m.name}>{m.displayName || m.name}</option>)}</select></label>
+                  <label className={settingsLabelClass}>Provider<SearchableSelect value={configuration.providerId} options={[{value:"",label:"Select provider"}, ...providers.map(r => ({value:r.id,label:r.name}))]} onChange={providerId => { setConfiguration({ ...configuration, providerId, model: "" }); setConfigurationModels([]); }} /></label>
+                  <label className={settingsLabelClass}>Model<SearchableSelect value={configuration.model} disabled={!configuration.providerId} options={[{value:"",label:"Select model"}, ...(configuration.model && !configurationModels.some(m => m.name === configuration.model) ? [{value:configuration.model,label:`${configuration.model} (saved)`}] : []), ...configurationModels.map(m => ({value:m.name,label:m.displayName || m.name}))]} onChange={model => setConfiguration({...configuration,model})} /></label>
                 </div>
                 <label className={settingsLabelClass}>System Prompt<textarea className={`${settingsTextareaClass} min-h-[240px]`} value={configuration.spell} onChange={e => setConfiguration({...configuration,spell:e.target.value})}/><span className="mt-1.5 text-[8px] leading-4 text-white/23">This prompt is sent as the reusable system instruction for every run.</span></label>
                 <div className="mt-5 border-t border-white/[.06] pt-4">
@@ -486,9 +522,10 @@ export function Settings({ configurations, onChange, onClose }: Props) {
               {provider ? <div className="rounded-[16px] border border-white/[.06] bg-white/[.018] p-4">
                 <div className="mb-4 flex items-start justify-between gap-3"><div><h3 className={settingsHeadingClass}>{provider.name}</h3><p className="mt-1.5 text-[9px] text-white/28">Connection details, credentials references, and models.</p></div><span className={settingsBadgeClass}>{providers.some((item) => item.id === provider.id) ? "SAVED" : "NEW"}</span></div>
                 <div className="flex items-center gap-2 mb-4"><button type="button" className={settingsButtonClass} disabled={providerTesting} onClick={() => void testProvider()}>{providerTesting ? "Testing…" : "Test connection"}</button><button type="button" className={settingsButtonClass} disabled={discoveringModels} onClick={() => void discoverModels()}>{discoveringModels ? "Discovering…" : "Discover models"}</button></div>
-                <div className="grid grid-cols-2 gap-3"><label className={settingsLabelClass}>Provider name<input className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25" value={provider.name} onChange={e => setProvider({...provider,name:e.target.value})}/></label><label className={settingsLabelClass}>Type<select className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25 [color-scheme:dark] [&>option]:bg-[#12151a] [&>option]:text-white" value={provider.kind} onChange={e => setProvider({...provider,kind:e.target.value})}><option value="openai_compatible">OpenAI compatible</option><option value="ollama">Ollama</option></select></label></div>
+                <div className="grid grid-cols-2 gap-3"><label className={settingsLabelClass}>Provider name<input className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25" value={provider.name} onChange={e => setProvider({...provider,name:e.target.value})}/></label><label className={settingsLabelClass}>Type<SearchableSelect value={provider.kind} options={[{value:"openai_compatible",label:"OpenAI compatible"},{value:"ollama",label:"Ollama"}]} onChange={kind => setProvider({...provider,kind})}/></label></div>
                 <label className={settingsLabelClass}>Base URL<input className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25" value={provider.baseUrl ?? ""} onChange={e => setProvider({...provider,baseUrl:e.target.value})}/></label>
-                <div className="grid grid-cols-2 gap-3"><label className={settingsLabelClass}>Credential reference<input className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25" value={provider.credentialRef ?? ""} onChange={e => setProvider({...provider,credentialRef:e.target.value})}/></label><label className={settingsLabelClass}>API key environment variable<input className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25" value={provider.apiKeyEnv ?? ""} placeholder="EVOCA_MY_PROVIDER_KEY" onChange={e => setProvider({...provider,apiKeyEnv:e.target.value})}/></label></div>
+                <div className="grid grid-cols-2 gap-3"><label className={settingsLabelClass}>Credential reference<input className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25" value={provider.credentialRef ?? ""} onChange={e => { setProvider({...provider,credentialRef:e.target.value}); setCredentialSaved(false); }}/></label><label className={settingsLabelClass}>API key environment variable<input className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25" value={provider.apiKeyEnv ?? ""} placeholder="Optional environment fallback" onChange={e => setProvider({...provider,apiKeyEnv:e.target.value})}/></label></div>
+                <div className="mt-3 rounded-[12px] border border-evoca-accent/10 bg-evoca-accent/[.035] p-3"><div className="flex items-center justify-between gap-3"><div><div className={settingsSectionMetaClass}>Windows Credential Manager</div><p className="mt-1 text-[9px] leading-4 text-white/35">API keys are stored outside SQLite and loaded only when a request needs them.</p></div><span className={`text-[8px] font-semibold uppercase tracking-[.12em] ${credentialSaved ? "text-evoca-success" : "text-white/25"}`}>{credentialSaved ? "STORED" : "NOT STORED"}</span></div><div className="mt-2 flex gap-2"><input type="password" autoComplete="off" className="min-w-0 flex-1 rounded-[10px] border border-white/[.075] bg-black/20 px-3 py-2 text-[10px] text-white outline-none placeholder:text-white/22 focus:border-evoca-accent/30" placeholder={credentialSaved ? "Enter a new key to replace the stored one" : "Paste API key"} value={providerCredential} onChange={e => setProviderCredential(e.target.value)} /><button type="button" className={settingsButtonClass} disabled={credentialBusy || !provider.credentialRef || !providerCredential} onClick={() => void saveProviderCredential()}>{credentialBusy ? "Saving…" : "Store key"}</button>{credentialSaved && <button type="button" className={settingsButtonClass} disabled={credentialBusy} onClick={() => void removeProviderCredential()}>Remove</button>}</div></div>
                 <label className={settingsLabelClass}>Custom headers (JSON)<textarea className={settingsTextareaClass} value={provider.headersJson ?? "{}"} onChange={e => setProvider({...provider,headersJson:e.target.value})}/></label>
 
                 <div className="mt-5 border-t border-white/[.06] pt-4">

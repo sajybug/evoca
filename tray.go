@@ -3,7 +3,7 @@ package main
 import (
 	_ "embed"
 
-	"github.com/getlantern/systray"
+	"github.com/secoba/systray"
 )
 
 //go:embed assets/evoca.ico
@@ -16,20 +16,47 @@ func (a *App) startTray() {
 		systray.SetTooltip("eVoca")
 
 		show := systray.AddMenuItem("Toggle eVoca", "Show or hide eVoca overlay")
+
+		// Native tray behavior on Windows: left click toggles the main window,
+		// while right click explicitly opens the context menu.
+		systray.SetOnClick(func(menu systray.IMenu) {
+			a.ToggleOverlay()
+		})
+		systray.SetOnRClick(func(menu systray.IMenu) {
+			_ = menu.ShowMenu()
+		})
+
+		// Keep the menu item as an explicit action as well. The current systray
+		// API uses callbacks on MenuItem instead of ClickedCh channels.
+		show.Click(func() {
+			a.ToggleOverlay()
+		})
+
+		autostart := systray.AddMenuItemCheckbox("Start eVoca with Windows", "Launch eVoca automatically when Windows starts", false)
+		if enabled, err := a.IsAutostartEnabled(); err == nil && enabled {
+			autostart.Check()
+		}
+		autostart.Click(func() {
+			enabled, err := a.IsAutostartEnabled()
+			if err != nil {
+				return
+			}
+			enabled = !enabled
+			if err := a.SetAutostart(enabled); err != nil {
+				return
+			}
+			if enabled {
+				autostart.Check()
+			} else {
+				autostart.Uncheck()
+			}
+		})
+
 		systray.AddSeparator()
 		quit := systray.AddMenuItem("Quit", "Quit eVoca")
-
-		go func() {
-			for {
-				select {
-				case <-show.ClickedCh:
-					a.ToggleOverlay()
-				case <-quit.ClickedCh:
-					a.Quit()
-					return
-				}
-			}
-		}()
+		quit.Click(func() {
+			a.Quit()
+		})
 	}, func() {})
 }
 

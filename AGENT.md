@@ -358,6 +358,18 @@ Only record durable architectural/product changes here. Do not append repetitive
 
 ---
 
+### Phase 13 — Windows startup, provider persistence, scalable dropdowns & secure credentials, Tray click behavior
+
+- Added a tray **Start eVoca with Windows** toggle backed by the per-user Windows Run registry entry.
+- Fixed default provider/model reseeding: built-in defaults are seeded once for a fresh database and deleted defaults are no longer recreated on later launches.
+- Replaced high-volume frontend native dropdowns with searchable, scroll-limited selectors so large provider/model/configuration lists remain usable.
+- Removed the PowerShell screenshot capture path and implemented primary-screen capture through native Win32 user32/gdi32 APIs on Windows.
+- Connected provider API-key storage to Windows Credential Manager; SQLite keeps only the credential reference, with environment variables retained as a fallback.
+- Provider deletion also removes its stored Windows credential; screenshot capture remains Windows-only.
+- Updated the tray integration so a native left-click toggles the eVoca overlay/window.
+- Right-click explicitly opens the existing tray context menu, preserving Toggle, autostart, and Quit actions.
+- Switched the systray dependency to a compatible fork that exposes native click callbacks.
+
 ## Current Roadmap
 
 The completed phases are located here.
@@ -375,6 +387,7 @@ Phase 9 -> Tailwind v4 UI rebuild -> Done
 Phase 10 -> Full Frontend Redesign -> Done
 Phase 11 -> Full Tailwind utility migration -> Done
 Phase 12 -> Storage picker, history deletion, backup/restore & request cancellation -> Done
+Phase 13 -> Windows startup, provider persistence, scalable dropdowns & secure credentials -> Done
 ```
 
 The exact next Phase may change; when it does, update the roadmap rather than keeping contradictory plans.

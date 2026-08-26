@@ -5,5 +5,3 @@ type CredentialStore interface {
 	Set(ref, value string) error
 	Delete(ref string) error
 }
-
-// MVP intentionally leaves implementation abstract. Production should use Windows Credential Manager or equivalent secure storage.

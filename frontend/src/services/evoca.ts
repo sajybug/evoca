@@ -24,6 +24,11 @@ import {
   DeleteExecution,
   ClearExecutions,
   CancelLLM,
+  IsAutostartEnabled,
+  SetAutostart,
+  HasProviderCredential,
+  SetProviderCredential,
+  DeleteProviderCredential,
   GetHotkey,
   SetHotkey,
   BeginScreenshot,
@@ -156,6 +161,12 @@ export const evoca = {
   cancelLLM(requestId: string): Promise<void> {
     return CancelLLM(requestId);
   },
+
+  isAutostartEnabled(): Promise<boolean> { return IsAutostartEnabled(); },
+  setAutostart(enabled: boolean): Promise<void> { return SetAutostart(enabled); },
+  hasProviderCredential(ref: string): Promise<boolean> { return HasProviderCredential(ref); },
+  setProviderCredential(ref: string, value: string): Promise<void> { return SetProviderCredential(ref, value); },
+  deleteProviderCredential(ref: string): Promise<void> { return DeleteProviderCredential(ref); },
 
   quit(): Promise<void> {
     return Quit();

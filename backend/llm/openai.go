@@ -8,11 +8,13 @@ import (
 	"os"
 	"strings"
 
+	"github.com/evoca-dev/evoca/backend/credentials"
 	"github.com/evoca-dev/evoca/backend/db"
 )
 
 type OpenAICompatible struct {
-	Provider db.Provider
+	Provider    db.Provider
+	Credentials credentials.CredentialStore
 }
 
 func (p OpenAICompatible) Generate(req Request) (string, error) {
@@ -26,6 +28,11 @@ func (p OpenAICompatible) Generate(req Request) (string, error) {
 	}
 
 	apiKey := os.Getenv(envName)
+	if apiKey == "" && p.Credentials != nil && p.Provider.CredentialRef != "" {
+		if stored, err := p.Credentials.Get(p.Provider.CredentialRef); err == nil {
+			apiKey = stored
+		}
+	}
 
 	userContent := any(req.Input)
 	if req.ImageBase64 != "" {

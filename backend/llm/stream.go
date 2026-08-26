@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/evoca-dev/evoca/backend/credentials"
 	"github.com/evoca-dev/evoca/backend/db"
 )
 
@@ -95,7 +96,7 @@ func streamOllama(ctx context.Context, provider db.Provider, req Request, onChun
 	return StreamResult{Text: full.String(), Metrics: metrics}, nil
 }
 
-func streamOpenAI(ctx context.Context, provider db.Provider, req Request, onChunk ChunkFunc) (StreamResult, error) {
+func streamOpenAI(ctx context.Context, provider db.Provider, req Request, onChunk ChunkFunc, store credentials.CredentialStore) (StreamResult, error) {
 	started := time.Now()
 	envName := provider.APIKeyEnv
 	if envName == "" {
@@ -127,8 +128,14 @@ func streamOpenAI(ctx context.Context, provider db.Provider, req Request, onChun
 	}
 	hreq.Header.Set("Content-Type", "application/json")
 	hreq.Header.Set("Accept", "text/event-stream")
-	if key := os.Getenv(envName); key != "" {
-		hreq.Header.Set("Authorization", "Bearer "+key)
+	apiKey := os.Getenv(envName)
+	if apiKey == "" && store != nil && provider.CredentialRef != "" {
+		if stored, err := store.Get(provider.CredentialRef); err == nil {
+			apiKey = stored
+		}
+	}
+	if apiKey != "" {
+		hreq.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 	if provider.HeadersJSON != "" && provider.HeadersJSON != "{}" {
 		var hs map[string]string

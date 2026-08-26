@@ -3,6 +3,7 @@ import { evoca } from "../../services/evoca";
 import type { Configuration, Execution, ExecutionPage } from "../../types/domain";
 import { Markdown } from "../overlay/Markdown";
 import { ConfirmModal } from "../common/ConfirmModal";
+import { SearchableSelect } from "../common/SearchableSelect";
 
 function formatTime(value: number) { const ms = value < 1e12 ? value * 1000 : value; return new Date(ms).toLocaleString(); }
 function formatDuration(ms: number) { if (!ms) return "—"; return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(2)} s`; }
@@ -40,9 +41,9 @@ export function HistoryPanel({ configurations, onClose }: { configurations: Conf
     <div className="border-b border-white/[.06] px-5 py-4">
       <div className="grid grid-cols-[1.6fr_1fr_.8fr_.8fr] gap-2 max-[900px]:grid-cols-2">
         <input className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25 text-[9px] !py-2.5" placeholder="Search prompts, answers, models..." value={search} onChange={(e) => { setPage(1); setSearch(e.target.value); }} />
-        <select className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25 [color-scheme:dark] [&>option]:bg-[#12151a] [&>option]:text-white text-[9px] !py-2.5" value={configurationId} onChange={(e) => { setPage(1); setConfigurationId(e.target.value); }}><option value="">All configurations</option>{configurations.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
-        <select className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25 [color-scheme:dark] [&>option]:bg-[#12151a] [&>option]:text-white text-[9px] !py-2.5" value={requestType} onChange={(e) => { setPage(1); setRequestType(e.target.value); }}><option value="">All inputs</option><option value="text">Text</option><option value="screenshot">Screenshot</option></select>
-        <select className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25 [color-scheme:dark] [&>option]:bg-[#12151a] [&>option]:text-white text-[9px] !py-2.5" value={status} onChange={(e) => { setPage(1); setStatus(e.target.value); }}><option value="">All statuses</option><option value="success">Success</option><option value="error">Error</option><option value="cancelled">Cancelled</option><option value="running">Running</option></select>
+        <SearchableSelect value={configurationId} options={[{value:"",label:"All configurations"}, ...configurations.map((x) => ({value:x.id,label:x.name}))]} onChange={(value) => { setPage(1); setConfigurationId(value); }} />
+        <SearchableSelect value={requestType} options={[{value:"",label:"All inputs"},{value:"text",label:"Text"},{value:"screenshot",label:"Screenshot"}]} onChange={(value) => { setPage(1); setRequestType(value); }} />
+        <SearchableSelect value={status} options={[{value:"",label:"All statuses"},{value:"success",label:"Success"},{value:"error",label:"Error"},{value:"cancelled",label:"Cancelled"},{value:"running",label:"Running"}]} onChange={(value) => { setPage(1); setStatus(value); }} />
       </div>
     </div>
 

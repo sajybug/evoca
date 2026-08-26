@@ -151,47 +151,59 @@ func (d *DB) initializeSchema() error {
 		return err
 	}
 
-	// Seed useful defaults for a new database.
-	now := time.Now().Unix()
-
-	_, err := d.conn.Exec(`
-		INSERT OR IGNORE INTO providers
-		  (id,name,kind,base_url,credential_ref,api_key_env,headers_json,created_at)
-		VALUES
-		  ('openai','OpenAI','openai_compatible','https://api.openai.com/v1',
-		   'openai_api_key','EVOCA_OPENAI_API_KEY','{}',?);
-
-		INSERT OR IGNORE INTO providers
-		  (id,name,kind,base_url,credential_ref,api_key_env,headers_json,created_at)
-		VALUES
-		  ('ollama','Ollama','ollama','http://localhost:11434',
-		   '','','{}',?);
-	`, now, now)
+	// Seed defaults exactly once. The previous implementation used INSERT OR IGNORE on every startup,
+	// which caused user-deleted default providers/models to come back on the next launch.
+	seeded, err := d.GetSetting("default_seeded", "")
 	if err != nil {
 		return err
 	}
+	if seeded == "1" {
+		return nil
+	}
 
-	_, err = d.conn.Exec(`
-		INSERT OR IGNORE INTO provider_models (id,provider_id,name,display_name,created_at)
+	var providerCount int
+	if err := d.conn.QueryRow(`SELECT COUNT(1) FROM providers`).Scan(&providerCount); err != nil {
+		return err
+	}
+	if providerCount > 0 {
+		// Existing installations were already initialized before this marker existed.
+		// Do not re-add defaults; only mark the database as initialized.
+		return d.SaveSetting("default_seeded", "1")
+	}
+
+	now := time.Now().Unix()
+	if _, err := d.conn.Exec(`
+		INSERT INTO providers
+		  (id,name,kind,base_url,credential_ref,api_key_env,headers_json,created_at)
+		VALUES
+		  ('openai','OpenAI','openai_compatible','https://api.openai.com/v1',
+		   'openai_api_key','EVOCA_OPENAI_API_KEY','{}',?),
+		  ('ollama','Ollama','ollama','http://localhost:11434',
+		   '','','{}',?)
+	`, now, now); err != nil {
+		return err
+	}
+	if _, err := d.conn.Exec(`
+		INSERT INTO provider_models (id,provider_id,name,display_name,created_at)
 		VALUES
 		  ('openai-gpt-5','openai','gpt-5','GPT-5',?),
 		  ('openai-gpt-5-mini','openai','gpt-5-mini','GPT-5 Mini',?),
 		  ('ollama-llama3','ollama','llama3','Llama 3',?)
-	`, now, now, now)
-	if err != nil {
+	`, now, now, now); err != nil {
 		return err
 	}
-
-	_, err = d.conn.Exec(`
-		INSERT OR IGNORE INTO configurations
+	if _, err := d.conn.Exec(`
+		INSERT INTO configurations
 		  (id,name,description,icon,provider_id,model,spell,input_type,output_type,
 		   temperature,max_tokens,created_at,updated_at)
 		VALUES
 		  ('translate','Translate','Translate text to Persian','✦','openai','gpt-5',
 		   'Translate the user input accurately into Persian. Preserve formatting.',
 		   'text','text',0.2,2000,?,?)
-	`, now, now)
-	return err
+	`, now, now); err != nil {
+		return err
+	}
+	return d.SaveSetting("default_seeded", "1")
 }
 
 func (d *DB) ensureColumn(table, column, definition string) error {

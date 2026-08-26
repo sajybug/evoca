@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/evoca-dev/evoca/backend/credentials"
 	"github.com/evoca-dev/evoca/backend/db"
 )
 
@@ -21,13 +22,13 @@ type Request struct {
 type Provider interface {
 	Generate(request Request) (string, error)
 }
-type Registry struct{}
+type Registry struct{ Credentials credentials.CredentialStore }
 
-func NewRegistry() *Registry { return &Registry{} }
+func NewRegistry() *Registry { return &Registry{Credentials: credentials.NewWindowsStore()} }
 func (r *Registry) Generate(provider db.Provider, request Request) (string, error) {
 	switch strings.ToLower(provider.Kind) {
 	case "openai_compatible":
-		return OpenAICompatible{Provider: provider}.Generate(request)
+		return OpenAICompatible{Provider: provider, Credentials: r.Credentials}.Generate(request)
 	case "ollama":
 		return Ollama{BaseURL: provider.BaseURL}.Generate(request)
 	default:
@@ -37,7 +38,7 @@ func (r *Registry) Generate(provider db.Provider, request Request) (string, erro
 func (r *Registry) GenerateStream(ctx context.Context, provider db.Provider, request Request, onChunk ChunkFunc) (StreamResult, error) {
 	switch strings.ToLower(provider.Kind) {
 	case "openai_compatible":
-		return streamOpenAI(ctx, provider, request, onChunk)
+		return streamOpenAI(ctx, provider, request, onChunk, r.Credentials)
 	case "ollama":
 		return streamOllama(ctx, provider, request, onChunk)
 	default:
