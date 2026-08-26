@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -33,12 +34,12 @@ func (r *Registry) Generate(provider db.Provider, request Request) (string, erro
 		return "", fmt.Errorf("unsupported provider type: %s", provider.Kind)
 	}
 }
-func (r *Registry) GenerateStream(provider db.Provider, request Request, onChunk ChunkFunc) (StreamResult, error) {
+func (r *Registry) GenerateStream(ctx context.Context, provider db.Provider, request Request, onChunk ChunkFunc) (StreamResult, error) {
 	switch strings.ToLower(provider.Kind) {
 	case "openai_compatible":
-		return streamOpenAI(provider, request, onChunk)
+		return streamOpenAI(ctx, provider, request, onChunk)
 	case "ollama":
-		return streamOllama(provider, request, onChunk)
+		return streamOllama(ctx, provider, request, onChunk)
 	default:
 		return StreamResult{}, fmt.Errorf("unsupported provider type: %s", provider.Kind)
 	}

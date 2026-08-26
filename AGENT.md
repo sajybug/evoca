@@ -345,6 +345,17 @@ Only record durable architectural/product changes here. Do not append repetitive
 - Kept only Tailwind theme/base rules plus animation keyframes and the non-visual Wails drag-region behavior in the stylesheet.
 - No UI redesign or behavioral changes were introduced in this phase.
 
+### Phase 12 — Storage picker, history deletion, backup/restore & request cancellation
+
+- Replaced manual storage-path editing with native directory selection controls for the database and chat-image locations.
+- Added single-entry and bulk History deletion, including cleanup of stored screenshot files.
+- Added a dedicated Backup tab with local ZIP backup/restore for SQLite data plus History images; restore reopens the database in-place.
+- Added real LLM request cancellation through context-aware HTTP streaming and a visible Cancel request action while waiting/generating.
+- Fixed global hotkey re-entry so Settings/History state is reset while the window is hidden before the launcher is shown, preventing the previous screen from flashing.
+- Streaming cancel control is placed directly below the explanatory streaming text.
+- Destructive delete/restore confirmations use the native eVoca-styled modal instead of browser confirmation dialogs.
+- The main launcher header includes a compact tray/minimize control that hides the window while leaving the system tray active.
+
 ---
 
 ## Current Roadmap
@@ -363,6 +374,7 @@ Phase 8 -> Configuration details, provider discovery & LLM loading -> Done
 Phase 9 -> Tailwind v4 UI rebuild -> Done
 Phase 10 -> Full Frontend Redesign -> Done
 Phase 11 -> Full Tailwind utility migration -> Done
+Phase 12 -> Storage picker, history deletion, backup/restore & request cancellation -> Done
 ```
 
 The exact next Phase may change; when it does, update the roadmap rather than keeping contradictory plans.

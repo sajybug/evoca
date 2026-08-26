@@ -23,8 +23,17 @@ export default function App() {
       setShowHistory(false);
       open();
     });
+    const restored = EventsOn("evoca:data:restored", async () => {
+      try {
+        const [nextConfigurations, nextProviders] = await Promise.all([evoca.getConfigurations(), evoca.getProviders()]);
+        setConfigurations(nextConfigurations);
+        setProviders(nextProviders);
+      } catch (error) {
+        console.error("restored data reload failed", error);
+      }
+    });
 
-    return () => cancel();
+    return () => { cancel(); restored(); };
   }, [open]);
 
   return (

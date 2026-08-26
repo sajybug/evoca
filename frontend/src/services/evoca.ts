@@ -16,6 +16,14 @@ import {
   DiscoverProviderModels,
   GetStorageSettings,
   SetStorageSettings,
+  ChooseDirectory,
+  ChooseBackupSavePath,
+  ChooseBackupFile,
+  CreateBackup,
+  RestoreBackup,
+  DeleteExecution,
+  ClearExecutions,
+  CancelLLM,
   GetHotkey,
   SetHotkey,
   BeginScreenshot,
@@ -85,6 +93,26 @@ export const evoca = {
     return SetStorageSettings(settings);
   },
 
+  chooseDirectory(current: string, title: string): Promise<string> {
+    return ChooseDirectory(current, title);
+  },
+
+  chooseBackupSavePath(current: string): Promise<string> {
+    return ChooseBackupSavePath(current);
+  },
+
+  chooseBackupFile(current: string): Promise<string> {
+    return ChooseBackupFile(current);
+  },
+
+  createBackup(path: string): Promise<void> {
+    return CreateBackup(path);
+  },
+
+  restoreBackup(path: string): Promise<void> {
+    return RestoreBackup(path);
+  },
+
   getHotkey(): Promise<string> {
     return GetHotkey();
   },
@@ -115,6 +143,18 @@ export const evoca = {
 
   getExecution(id: string): Promise<Execution> {
     return GetExecution(id);
+  },
+
+  deleteExecution(id: string): Promise<void> {
+    return DeleteExecution(id);
+  },
+
+  clearExecutions(): Promise<void> {
+    return ClearExecutions();
+  },
+
+  cancelLLM(requestId: string): Promise<void> {
+    return CancelLLM(requestId);
   },
 
   quit(): Promise<void> {

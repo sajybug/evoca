@@ -159,6 +159,55 @@ func (d *DB) ListExecutions(page, pageSize int, search, status, requestType, con
 	return ExecutionPage{Items: items, Page: page, PageSize: pageSize, Total: total, TotalPages: totalPages}, nil
 }
 
+func (d *DB) DeleteExecution(id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return fmt.Errorf("execution id is required")
+	}
+	var imageData string
+	if err := d.conn.QueryRow(`SELECT COALESCE(image_data,'') FROM executions WHERE id=?`, id).Scan(&imageData); err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("execution %q does not exist", id)
+		}
+		return err
+	}
+	if _, err := d.conn.Exec(`DELETE FROM executions WHERE id=?`, id); err != nil {
+		return err
+	}
+	if strings.HasPrefix(imageData, "@file:") {
+		_ = os.Remove(strings.TrimPrefix(imageData, "@file:"))
+	}
+	return nil
+}
+
+func (d *DB) ClearExecutions() error {
+	rows, err := d.conn.Query(`SELECT COALESCE(image_data,'') FROM executions`)
+	if err != nil {
+		return err
+	}
+	var imagePaths []string
+	for rows.Next() {
+		var imageData string
+		if err := rows.Scan(&imageData); err != nil {
+			rows.Close()
+			return err
+		}
+		if strings.HasPrefix(imageData, "@file:") {
+			imagePaths = append(imagePaths, strings.TrimPrefix(imageData, "@file:"))
+		}
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if _, err := d.conn.Exec(`DELETE FROM executions`); err != nil {
+		return err
+	}
+	for _, path := range imagePaths {
+		_ = os.Remove(path)
+	}
+	return nil
+}
+
 func (d *DB) GetExecution(id string) (Execution, error) {
 	var x Execution
 	err := d.conn.QueryRow(`

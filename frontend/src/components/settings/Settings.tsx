@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Provider, ProviderModel, Configuration, StorageSettings } from "../../types/domain";
 import { evoca } from "../../services/evoca";
+import { ConfirmModal } from "../common/ConfirmModal";
 
 interface Props {
   configurations: Configuration[];
@@ -8,7 +9,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Section = "general" | "configurations" | "providers";
+type Section = "general" | "configurations" | "providers" | "backup";
 
 const settingsLabelClass = "flex flex-col gap-1.5 text-[10px] font-medium leading-4 text-white/55";
 const settingsBodyClass = "text-[10px] leading-5 text-white/40";
@@ -113,6 +114,8 @@ export function Settings({ configurations, onChange, onClose }: Props) {
   const [hotkey, setHotkey] = useState("Ctrl+Space");
   const [storage, setStorage] = useState<StorageSettings | null>(null);
   const [storageSaving, setStorageSaving] = useState(false);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [confirm, setConfirm] = useState<{ kind: "configuration" | "provider" | "model" | "restore"; id?: string } | null>(null);
 
   useEffect(() => {
     if (!message) return;
@@ -278,7 +281,7 @@ export function Settings({ configurations, onChange, onClose }: Props) {
     }
   }
 
-  async function deleteProvider() {
+  async function performDeleteProvider() {
     if (!provider) return;
 
     try {
@@ -335,7 +338,7 @@ export function Settings({ configurations, onChange, onClose }: Props) {
     }
   }
 
-  async function deleteModel(id: string) {
+  async function performDeleteModel(id: string) {
     try {
       await evoca.deleteProviderModel(id);
       if (provider) {
@@ -385,7 +388,7 @@ export function Settings({ configurations, onChange, onClose }: Props) {
       <div className="flex items-center justify-between border-b border-white/[.06] px-5 py-4 [--wails-draggable:drag]">
         <div className="flex items-center gap-3">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[11px] border border-evoca-accent/20 bg-[#F5E8C5] text-[30px] text-[#1B1B1A] inline-flex items-center justify-center leading-none">✦</span>
-          <div><h1 className={settingsTitleClass}>Settings</h1><p className="mt-1 text-[9px] leading-4 text-white/32">Shape how eVoca runs, stores data, and connects to models.</p></div>
+          <div><h1 className={settingsTitleClass}>Settings</h1><p className="text-[9px] leading-4 text-white/32">Shape how eVoca runs, stores data, and connects to models.</p></div>
         </div>
         <div className="flex items-center gap-2">
           <button type="button" className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[.07] bg-white/[.03] px-2.5 py-1.5 text-[9px] font-semibold text-white/60 transition hover:bg-white/[.06] hover:text-white !border-red-200/10 !bg-red-300/[.04] !text-red-100/60 hover:!bg-red-300/[.08] hover:!text-red-50" onClick={() => void evoca.quit()}>Exit eVoca</button>
@@ -393,10 +396,11 @@ export function Settings({ configurations, onChange, onClose }: Props) {
         </div>
       </div>
 
-      <div className="mx-5 my-4 grid grid-cols-3 gap-1 rounded-[12px] border border-white/[.06] bg-black/15 p-1">
+      <div className="mx-5 my-4 grid grid-cols-4 gap-1 rounded-[12px] border border-white/[.06] bg-black/15 p-1">
         <button type="button" className={`${section === "general" ? "rounded-[9px] border-0 bg-transparent px-3 py-2 text-[10px] font-semibold text-white/35 transition hover:bg-white/[.035] hover:text-white/70 bg-white/[.075] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.04)]" : "rounded-[9px] border-0 bg-transparent px-3 py-2 text-[10px] font-semibold text-white/35 transition hover:bg-white/[.035] hover:text-white/70"}`} onClick={() => setSection("general")}>General</button>
         <button type="button" className={`${section === "configurations" ? "rounded-[9px] border-0 bg-transparent px-3 py-2 text-[10px] font-semibold text-white/35 transition hover:bg-white/[.035] hover:text-white/70 bg-white/[.075] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.04)]" : "rounded-[9px] border-0 bg-transparent px-3 py-2 text-[10px] font-semibold text-white/35 transition hover:bg-white/[.035] hover:text-white/70"}`} onClick={() => setSection("configurations")}>Configurations</button>
         <button type="button" className={`${section === "providers" ? "rounded-[9px] border-0 bg-transparent px-3 py-2 text-[10px] font-semibold text-white/35 transition hover:bg-white/[.035] hover:text-white/70 bg-white/[.075] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.04)]" : "rounded-[9px] border-0 bg-transparent px-3 py-2 text-[10px] font-semibold text-white/35 transition hover:bg-white/[.035] hover:text-white/70"}`} onClick={() => setSection("providers")}>Providers</button>
+        <button type="button" className={`${section === "backup" ? "rounded-[9px] border-0 bg-transparent px-3 py-2 text-[10px] font-semibold text-white/35 transition hover:bg-white/[.035] hover:text-white/70 bg-white/[.075] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.04)]" : "rounded-[9px] border-0 bg-transparent px-3 py-2 text-[10px] font-semibold text-white/35 transition hover:bg-white/[.035] hover:text-white/70"}`} onClick={() => setSection("backup")}>Backup</button>
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden px-5 pb-5">
@@ -424,11 +428,22 @@ export function Settings({ configurations, onChange, onClose }: Props) {
                 <div className="rounded-[14px] border border-white/[.06] bg-white/[.018] p-4">
                   <p className="mb-4 text-[10px] leading-5 text-white/35">Choose where eVoca keeps its local database and chat images. Changing these paths is persisted immediately, but the new database location is picked up after restart.</p>
                   {storage && <div className="space-y-3">
-                    <label className={settingsLabelClass}>Database path<input className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25" value={storage.databasePath} onChange={(e) => setStorage({ ...storage, databasePath: e.target.value })} /></label>
-                    <label className={settingsLabelClass}>Chat images path<input className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25" value={storage.imagesPath} onChange={(e) => setStorage({ ...storage, imagesPath: e.target.value })} /></label>
+                    <label className={settingsLabelClass}>Database file<div className="flex items-center gap-2"><input readOnly className="min-w-0 flex-1 rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white/65 outline-none" value={storage.databasePath} /><button type="button" className={settingsButtonClass} onClick={async () => { try { const selected = await evoca.chooseDirectory(storage.databasePath, "Choose database folder"); if (selected) { const base = selected.replace(/[\\/]+$/, ""); setStorage({ ...storage, databasePath: `${base}\\evoca.db` }); } } catch (error) { setMessage(`Folder selection failed: ${String(error)}`); } }}>Choose…</button></div></label>
+                    <label className={settingsLabelClass}>Chat images folder<div className="flex items-center gap-2"><input readOnly className="min-w-0 flex-1 rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white/65 outline-none" value={storage.imagesPath} /><button type="button" className={settingsButtonClass} onClick={async () => { try { const selected = await evoca.chooseDirectory(storage.imagesPath, "Choose chat images folder"); if (selected) setStorage({ ...storage, imagesPath: selected }); } catch (error) { setMessage(`Folder selection failed: ${String(error)}`); } }}>Choose…</button></div></label>
                     <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/[.06] pt-4"><small className="text-[8px] text-white/25">Local files only · no account required</small><button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white disabled:opacity-40 !border-evoca-accent/35 !bg-evoca-accent !text-[#18170f] !shadow-[0_8px_22px_rgba(216,184,110,.13)] hover:!bg-evoca-accent-2" disabled={storageSaving} onClick={async () => { setStorageSaving(true); try { await evoca.setStorageSettings(storage); setMessage("Storage paths saved. Restart eVoca to apply the new database path."); } catch (error) { setMessage(`Storage settings failed: ${String(error)}`); } finally { setStorageSaving(false); } }}>{storageSaving ? "Saving…" : "Save paths"}</button></div>
                   </div>}
                 </div>
+              </div>
+            </div>
+          </div>
+        ) : section === "backup" ? (
+          <div className="h-full min-h-0 overflow-y-auto pr-1">
+            <div className="rounded-[16px] border border-white/[.06] bg-white/[.018] p-4">
+              <div className="mb-4 flex items-start justify-between gap-3"><div><h3 className={settingsHeadingClass}>Backup & Restore</h3><p className="mt-1.5 text-[9px] leading-4 text-white/28">Protect local configurations, providers, execution history, and saved chat images.</p></div><span className={settingsBadgeClass}>LOCAL</span></div>
+              <div className="space-y-3">
+                <div className="rounded-[14px] border border-white/[.06] bg-white/[.018] p-4"><div className="flex items-start justify-between gap-4"><div><div className={settingsSectionMetaClass}>Create backup</div><p className={settingsBodyClass}>A single ZIP contains your SQLite data and the images used by History. API keys are not copied from environment variables.</p></div><button type="button" className="shrink-0 inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white disabled:opacity-40 !border-evoca-accent/35 !bg-evoca-accent !text-[#18170f]" disabled={backupBusy} onClick={async () => { setBackupBusy(true); try { const target = await evoca.chooseBackupSavePath(""); if (target) { await evoca.createBackup(target); setMessage("Backup created successfully."); } } catch (error) { setMessage(`Backup failed: ${String(error)}`); } finally { setBackupBusy(false); } }}>{backupBusy ? "Working…" : "Create backup"}</button></div></div>
+                <div className="rounded-[14px] border border-white/[.06] bg-white/[.018] p-4"><div className="flex items-start justify-between gap-4"><div><div className={settingsSectionMetaClass}>Restore backup</div><p className={settingsBodyClass}>Restoring replaces the current local database and History images with the selected backup.</p></div><button type="button" className="shrink-0 inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white disabled:opacity-40 !border-red-200/10 !bg-red-300/[.055] !text-evoca-danger" disabled={backupBusy} onClick={() => setConfirm({ kind: "restore" })}>Restore backup</button></div></div>
+                <div className="rounded-[12px] border border-amber-200/[.08] bg-amber-200/[.025] px-3 py-2.5 text-[9px] leading-5 text-white/35">Restoring does not restore operating-system environment variables or other machine secrets.</div>
               </div>
             </div>
           </div>
@@ -456,7 +471,7 @@ export function Settings({ configurations, onChange, onClose }: Props) {
                   <div className="mb-3 flex items-center justify-between"><div><div className={settingsSectionMetaClass}>Generation</div><p className={settingsBodyClass}>Keep these values close to the task rather than the provider.</p></div></div>
                   <div className="grid grid-cols-2 gap-3"><label className={settingsLabelClass}>Temperature<input className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25" type="number" step="0.1" min="0" max="2" value={configuration.temperature ?? 0.2} onChange={e => setConfiguration({...configuration,temperature:Number(e.target.value)})}/></label><label className={settingsLabelClass}>Max tokens<input className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25" type="number" min="1" value={configuration.maxTokens ?? 2000} onChange={e => setConfiguration({...configuration,maxTokens:Number(e.target.value)})}/></label></div>
                 </div>
-                <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/[.06] pt-4"><button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white disabled:opacity-40 !border-red-200/10 !bg-red-300/[.055] !text-evoca-danger hover:!bg-red-300/[.09]" onClick={async () => { await evoca.deleteConfiguration(configuration.id); const next = await evoca.getConfigurations(); onChange(next); setConfiguration(next[0] ?? null); }}>Delete</button><div className="flex items-center gap-2"><small className="text-[8px] text-white/25">{configuration.providerId ? "Ready to save" : "Select a provider and model"}</small><button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white disabled:opacity-40 !border-evoca-accent/35 !bg-evoca-accent !text-[#18170f] !shadow-[0_8px_22px_rgba(216,184,110,.13)] hover:!bg-evoca-accent-2" disabled={saving} onClick={() => void saveConfiguration()}>{saving ? "Saving…" : "Save configuration"}</button></div></div>
+                <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/[.06] pt-4"><button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white disabled:opacity-40 !border-red-200/10 !bg-red-300/[.055] !text-evoca-danger hover:!bg-red-300/[.09]" onClick={() => setConfirm({ kind: "configuration", id: configuration.id })}>Delete</button><div className="flex items-center gap-2"><small className="text-[8px] text-white/25">{configuration.providerId ? "Ready to save" : "Select a provider and model"}</small><button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white disabled:opacity-40 !border-evoca-accent/35 !bg-evoca-accent !text-[#18170f] !shadow-[0_8px_22px_rgba(216,184,110,.13)] hover:!bg-evoca-accent-2" disabled={saving} onClick={() => void saveConfiguration()}>{saving ? "Saving…" : "Save configuration"}</button></div></div>
               </div> : <div className="rounded-[16px] border border-white/[.06] bg-white/[.018] p-4 flex min-h-[160px] flex-1 items-center justify-center text-center text-[10px] text-white/28">Create a configuration from the left panel to begin.</div>}
             </div>
           </div>
@@ -479,15 +494,40 @@ export function Settings({ configurations, onChange, onClose }: Props) {
                 <div className="mt-5 border-t border-white/[.06] pt-4">
                   <div className="mb-3 flex items-center justify-between"><div><div className={settingsSectionMetaClass}>Models</div><p className={settingsBodyClass}>Add local model aliases or import what the provider exposes.</p></div><span className="text-[8px] text-white/22">{models.length} saved</span></div>
                   <div className="grid grid-cols-[1.15fr_1fr_auto] gap-2"><input className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25" placeholder="Model ID" value={modelName} onChange={e => setModelName(e.target.value)}/><input className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25" placeholder="Display name" value={modelLabel} onChange={e => setModelLabel(e.target.value)}/><button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white disabled:opacity-40 !border-evoca-accent/35 !bg-evoca-accent !text-[#18170f] !shadow-[0_8px_22px_rgba(216,184,110,.13)] hover:!bg-evoca-accent-2" disabled={!modelName.trim()} onClick={() => void addModel()}>Add</button></div>
-                  <div className="mt-2 flex flex-col gap-1.5">{models.filter(Boolean).map(m => <div className="grid grid-cols-[1fr_1fr_auto] items-center gap-2 rounded-[10px] border border-white/[.05] bg-white/[.02] px-2.5 py-2.5" key={m.id}><span className="truncate text-[9px] text-white/65">{m.displayName?.trim() || m.name}</span><code className="truncate rounded-[6px] border border-white/[.08] bg-white/[.025] px-1.5 py-1 font-mono text-[8px] text-white/33">{m.name}</code><button type="button" className="rounded-[8px] border border-transparent px-2 py-1.5 text-[9px] text-white/35 transition hover:bg-white/[.05] hover:text-white" onClick={() => void deleteModel(m.id)}>Remove</button></div>)}</div>
+                  <div className="mt-2 flex flex-col gap-1.5">{models.filter(Boolean).map(m => <div className="grid grid-cols-[1fr_1fr_auto] items-center gap-2 rounded-[10px] border border-white/[.05] bg-white/[.02] px-2.5 py-2.5" key={m.id}><span className="truncate text-[9px] text-white/65">{m.displayName?.trim() || m.name}</span><code className="truncate rounded-[6px] border border-white/[.08] bg-white/[.025] px-1.5 py-1 font-mono text-[8px] text-white/33">{m.name}</code><button type="button" className="rounded-[8px] border border-transparent px-2 py-1.5 text-[9px] text-white/35 transition hover:bg-white/[.05] hover:text-white" onClick={() => setConfirm({ kind: "model", id: m.id })}>Remove</button></div>)}</div>
                   {discoveredModels.length > 0 && <div className="mt-4 rounded-[11px] border border-dashed border-white/[.06] bg-black/10 p-2.5"><div className="mb-2 text-[9px] font-semibold uppercase tracking-[.14em] text-white/25">Available from provider</div><div className="mt-2 flex flex-col gap-1.5">{discoveredModels.map(m => <div className="grid grid-cols-[1fr_1fr_auto] items-center gap-2 rounded-[10px] border border-white/[.05] bg-white/[.02] px-2.5 py-2.5" key={m.id}><span className="truncate text-[9px] text-white/65">{m.displayName?.trim() || m.name}</span><code className="truncate rounded-[6px] border border-white/[.08] bg-white/[.025] px-1.5 py-1 font-mono text-[8px] text-white/33">{m.name}</code><button type="button" className="rounded-[8px] border border-transparent px-2 py-1.5 text-[9px] text-white/35 transition hover:bg-white/[.05] hover:text-white" onClick={() => void addDiscoveredModel(m)}>Add</button></div>)}</div></div>}
                 </div>
-                <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/[.06] pt-4"><button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white disabled:opacity-40 !border-red-200/10 !bg-red-300/[.055] !text-evoca-danger hover:!bg-red-300/[.09]" onClick={() => void deleteProvider()}>Delete provider</button><button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white disabled:opacity-40 !border-evoca-accent/35 !bg-evoca-accent !text-[#18170f] !shadow-[0_8px_22px_rgba(216,184,110,.13)] hover:!bg-evoca-accent-2" disabled={saving} onClick={() => void saveProvider()}>{saving ? "Saving…" : "Save provider"}</button></div>
+                <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/[.06] pt-4"><button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white disabled:opacity-40 !border-red-200/10 !bg-red-300/[.055] !text-evoca-danger hover:!bg-red-300/[.09]" onClick={() => setConfirm({ kind: "provider", id: provider.id })}>Delete provider</button><button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white disabled:opacity-40 !border-evoca-accent/35 !bg-evoca-accent !text-[#18170f] !shadow-[0_8px_22px_rgba(216,184,110,.13)] hover:!bg-evoca-accent-2" disabled={saving} onClick={() => void saveProvider()}>{saving ? "Saving…" : "Save provider"}</button></div>
               </div> : <div className="rounded-[16px] border border-white/[.06] bg-white/[.018] p-4 flex min-h-[160px] flex-1 items-center justify-center text-center text-[10px] text-white/28">Add a provider from the left panel to connect eVoca to an LLM backend.</div>}
             </div>
           </div>
         )}
       </div>
+    <ConfirmModal
+      open={confirm !== null}
+      title={confirm?.kind === "restore" ? "Restore backup?" : "Delete item?"}
+      message={confirm?.kind === "restore" ? "Current local configurations and History will be replaced." : "This action cannot be undone."}
+      confirmLabel={confirm?.kind === "restore" ? "Restore" : "Delete"}
+      busy={backupBusy || saving}
+      onCancel={() => setConfirm(null)}
+      onConfirm={async () => {
+        const action = confirm;
+        if (!action) return;
+        if (action.kind === "restore") {
+          setBackupBusy(true);
+          try { const target = await evoca.chooseBackupFile(""); if (target) { await evoca.restoreBackup(target); onChange(await evoca.getConfigurations()); setMessage("Backup restored successfully."); } setConfirm(null); }
+          catch (error) { setMessage(`Restore failed: ${String(error)}`); }
+          finally { setBackupBusy(false); }
+          return;
+        }
+        if (action.kind === "configuration" && action.id) {
+          try { await evoca.deleteConfiguration(action.id); const next = await evoca.getConfigurations(); onChange(next); setConfiguration(next[0] ?? null); setConfirm(null); setMessage("Configuration deleted."); } catch (error) { setMessage(String(error)); }
+          return;
+        }
+        if (action.kind === "provider" && action.id) { await performDeleteProvider(); setConfirm(null); return; }
+        if (action.kind === "model" && action.id) { await performDeleteModel(action.id); setConfirm(null); }
+      }}
+    />
     </section>
   );
 }

@@ -3,6 +3,7 @@ package llm
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,7 +17,7 @@ import (
 
 type ChunkFunc func(string) error
 
-func streamOllama(provider db.Provider, req Request, onChunk ChunkFunc) (StreamResult, error) {
+func streamOllama(ctx context.Context, provider db.Provider, req Request, onChunk ChunkFunc) (StreamResult, error) {
 	started := time.Now()
 	base := strings.TrimRight(provider.BaseURL, "/")
 	if base == "" {
@@ -28,7 +29,7 @@ func streamOllama(provider db.Provider, req Request, onChunk ChunkFunc) (StreamR
 	}
 	body := map[string]any{"model": req.Model, "stream": true, "messages": []map[string]any{{"role": "system", "content": req.Spell}, user}}
 	payload, _ := json.Marshal(body)
-	hreq, err := http.NewRequest(http.MethodPost, base+"/api/chat", bytes.NewReader(payload))
+	hreq, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/chat", bytes.NewReader(payload))
 	if err != nil {
 		return StreamResult{}, err
 	}
@@ -94,7 +95,7 @@ func streamOllama(provider db.Provider, req Request, onChunk ChunkFunc) (StreamR
 	return StreamResult{Text: full.String(), Metrics: metrics}, nil
 }
 
-func streamOpenAI(provider db.Provider, req Request, onChunk ChunkFunc) (StreamResult, error) {
+func streamOpenAI(ctx context.Context, provider db.Provider, req Request, onChunk ChunkFunc) (StreamResult, error) {
 	started := time.Now()
 	envName := provider.APIKeyEnv
 	if envName == "" {
@@ -120,7 +121,7 @@ func streamOpenAI(provider db.Provider, req Request, onChunk ChunkFunc) (StreamR
 	if base == "" {
 		base = "https://api.openai.com/v1"
 	}
-	hreq, err := http.NewRequest(http.MethodPost, base+"/chat/completions", bytes.NewReader(payload))
+	hreq, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/chat/completions", bytes.NewReader(payload))
 	if err != nil {
 		return StreamResult{}, err
 	}

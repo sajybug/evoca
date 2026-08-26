@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,12 +22,14 @@ type App struct {
 	providers      *llm.Registry
 	hotkey         *hotkey.Manager
 	overlayVisible bool
+	streamMu       sync.Mutex
+	streams        map[string]context.CancelFunc
 	screenshotMu   sync.Mutex
 	screenshotPNG  []byte
 }
 
 func NewApp() *App {
-	return &App{}
+	return &App{streams: make(map[string]context.CancelFunc)}
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -58,6 +63,12 @@ func (a *App) domReady(ctx context.Context) {
 }
 
 func (a *App) shutdown(ctx context.Context) {
+	a.streamMu.Lock()
+	for _, cancel := range a.streams {
+		cancel()
+	}
+	a.streams = make(map[string]context.CancelFunc)
+	a.streamMu.Unlock()
 	a.stopTray()
 	if a.hotkey != nil {
 		_ = a.hotkey.Stop()
@@ -77,14 +88,19 @@ func (a *App) ToggleOverlay() {
 		return
 	}
 
+	// Tell the renderer to switch back to the launcher while the window is still hidden.
+	// A short delay lets React commit the reset before the native window becomes visible,
+	// preventing the previous Settings/History state from flashing for a frame.
+	runtime.EventsEmit(a.ctx, "evoca:overlay", map[string]any{
+		"timestamp": time.Now().UnixMilli(),
+		"reset":     true,
+	})
+	time.Sleep(60 * time.Millisecond)
 	runtime.WindowShow(a.ctx)
 	runtime.WindowSetAlwaysOnTop(a.ctx, true)
 	runtime.WindowCenter(a.ctx)
 
 	a.overlayVisible = true
-	runtime.EventsEmit(a.ctx, "evoca:overlay", map[string]any{
-		"timestamp": time.Now().UnixMilli(),
-	})
 }
 
 func (a *App) BeginScreenshot() (string, error) {
@@ -199,6 +215,91 @@ func (a *App) SetStorageSettings(settings db.StorageSettings) error {
 	return nil
 }
 
+func (a *App) ChooseDirectory(current, title string) (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("app is not initialized")
+	}
+	selected, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		DefaultDirectory: filepath.Dir(current),
+		Title:            title,
+	})
+	if err != nil || strings.TrimSpace(selected) == "" {
+		return selected, err
+	}
+	return selected, nil
+}
+
+func (a *App) ChooseBackupSavePath(current string) (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("app is not initialized")
+	}
+	return runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		DefaultDirectory: filepath.Dir(current),
+		DefaultFilename:  "eVoca-backup.zip",
+		Title:            "Save eVoca backup",
+		Filters:          []runtime.FileFilter{{DisplayName: "eVoca backup (*.zip)", Pattern: "*.zip"}},
+	})
+}
+
+func (a *App) ChooseBackupFile(current string) (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("app is not initialized")
+	}
+	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		DefaultDirectory: filepath.Dir(current),
+		Title:            "Restore eVoca backup",
+		Filters:          []runtime.FileFilter{{DisplayName: "eVoca backup (*.zip)", Pattern: "*.zip"}},
+	})
+}
+
+func (a *App) CreateBackup(path string) error {
+	if a.database == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	return a.database.BackupTo(path)
+}
+
+func (a *App) RestoreBackup(path string) error {
+	if a.database == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	if strings.TrimSpace(path) == "" {
+		return fmt.Errorf("backup path is required")
+	}
+	if err := a.database.Close(); err != nil {
+		return err
+	}
+	if err := db.RestoreFromBackup(path); err != nil {
+		// The active handle is closed at this point; always reopen the current database
+		// so a failed restore does not leave the running app without a usable DB.
+		if reopened, reopenErr := db.Open(a.ctx); reopenErr == nil {
+			a.database = reopened
+		}
+		return err
+	}
+	database, err := db.Open(a.ctx)
+	if err != nil {
+		return err
+	}
+	a.database = database
+	runtime.EventsEmit(a.ctx, "evoca:data:restored", map[string]any{"timestamp": time.Now().UnixMilli()})
+	return nil
+}
+
+func (a *App) DeleteExecution(id string) error {
+	if a.database == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	return a.database.DeleteExecution(id)
+}
+
+func (a *App) ClearExecutions() error {
+	if a.database == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	return a.database.ClearExecutions()
+}
+
 func (a *App) Quit() {
 	if a.ctx != nil {
 		runtime.Quit(a.ctx)
@@ -270,30 +371,30 @@ func (a *App) DeleteProvider(id string) error {
 }
 
 func (a *App) TestProvider(provider db.Provider) error {
-    if a.providers == nil {
-        return fmt.Errorf("provider registry is not initialized")
-    }
-    return llm.TestProvider(provider)
+	if a.providers == nil {
+		return fmt.Errorf("provider registry is not initialized")
+	}
+	return llm.TestProvider(provider)
 }
 
 func (a *App) DiscoverProviderModels(provider db.Provider) ([]db.ProviderModel, error) {
-    if a.providers == nil {
-        return nil, fmt.Errorf("provider registry is not initialized")
-    }
-    discovered, err := llm.DiscoverModels(provider)
-    if err != nil {
-        return nil, err
-    }
-    models := make([]db.ProviderModel, 0, len(discovered))
-    for _, model := range discovered {
-        models = append(models, db.ProviderModel{
-            ID: fmt.Sprintf("%s:%s", provider.ID, model.Name),
-            ProviderID: provider.ID,
-            Name: model.Name,
-            DisplayName: model.DisplayName,
-        })
-    }
-    return models, nil
+	if a.providers == nil {
+		return nil, fmt.Errorf("provider registry is not initialized")
+	}
+	discovered, err := llm.DiscoverModels(provider)
+	if err != nil {
+		return nil, err
+	}
+	models := make([]db.ProviderModel, 0, len(discovered))
+	for _, model := range discovered {
+		models = append(models, db.ProviderModel{
+			ID:          fmt.Sprintf("%s:%s", provider.ID, model.Name),
+			ProviderID:  provider.ID,
+			Name:        model.Name,
+			DisplayName: model.DisplayName,
+		})
+	}
+	return models, nil
 }
 
 func (a *App) GetProviderModels(providerID string) ([]db.ProviderModel, error) {
@@ -320,6 +421,35 @@ func (a *App) DeleteProviderModel(id string) error {
 	return a.database.DeleteProviderModel(id)
 }
 
+func (a *App) registerStream(requestID string) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(a.ctx)
+	a.streamMu.Lock()
+	a.streams[requestID] = cancel
+	a.streamMu.Unlock()
+	return ctx, cancel
+}
+
+func (a *App) unregisterStream(requestID string) {
+	a.streamMu.Lock()
+	delete(a.streams, requestID)
+	a.streamMu.Unlock()
+}
+
+func (a *App) CancelLLM(requestID string) error {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return fmt.Errorf("request id is required")
+	}
+	a.streamMu.Lock()
+	cancel := a.streams[requestID]
+	a.streamMu.Unlock()
+	if cancel == nil {
+		return nil
+	}
+	cancel()
+	return nil
+}
+
 func (a *App) StartConfigurationStream(id, input, requestID string) error {
 	if a.database == nil {
 		return fmt.Errorf("database is not initialized")
@@ -337,12 +467,20 @@ func (a *App) StartConfigurationStream(id, input, requestID string) error {
 		return err
 	}
 	runtime.EventsEmit(a.ctx, "evoca:llm:start", map[string]any{"id": requestID, "executionId": executionID})
+	requestCtx, cancel := a.registerStream(requestID)
 	go func() {
-		result, err := a.providers.GenerateStream(provider, llm.Request{Model: configuration.Model, Spell: configuration.Spell, Input: input, Temperature: configuration.Temperature, MaxTokens: configuration.MaxTokens, OutputType: configuration.OutputType}, func(chunk string) error {
+		defer cancel()
+		defer a.unregisterStream(requestID)
+		result, err := a.providers.GenerateStream(requestCtx, provider, llm.Request{Model: configuration.Model, Spell: configuration.Spell, Input: input, Temperature: configuration.Temperature, MaxTokens: configuration.MaxTokens, OutputType: configuration.OutputType}, func(chunk string) error {
 			runtime.EventsEmit(a.ctx, "evoca:llm:chunk", map[string]any{"id": requestID, "chunk": chunk})
 			return nil
 		})
 		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				_ = a.database.CompleteExecution(executionID, "", "cancelled", "", db.ExecutionMetrics{})
+				runtime.EventsEmit(a.ctx, "evoca:llm:cancelled", map[string]any{"id": requestID, "executionId": executionID})
+				return
+			}
 			_ = a.database.CompleteExecution(executionID, "", "error", err.Error(), db.ExecutionMetrics{})
 			runtime.EventsEmit(a.ctx, "evoca:llm:error", map[string]any{"id": requestID, "executionId": executionID, "error": err.Error()})
 			return
@@ -387,12 +525,20 @@ func (a *App) StartScreenshotStream(id, input, requestID string, x, y, width, he
 		return err
 	}
 	runtime.EventsEmit(a.ctx, "evoca:llm:start", map[string]any{"id": requestID, "executionId": executionID})
+	requestCtx, cancel := a.registerStream(requestID)
 	go func() {
-		result, err := a.providers.GenerateStream(provider, llm.Request{Model: configuration.Model, Spell: configuration.Spell, Input: input, ImageBase64: imageBase64, Temperature: configuration.Temperature, MaxTokens: configuration.MaxTokens, OutputType: configuration.OutputType}, func(chunk string) error {
+		defer cancel()
+		defer a.unregisterStream(requestID)
+		result, err := a.providers.GenerateStream(requestCtx, provider, llm.Request{Model: configuration.Model, Spell: configuration.Spell, Input: input, ImageBase64: imageBase64, Temperature: configuration.Temperature, MaxTokens: configuration.MaxTokens, OutputType: configuration.OutputType}, func(chunk string) error {
 			runtime.EventsEmit(a.ctx, "evoca:llm:chunk", map[string]any{"id": requestID, "chunk": chunk})
 			return nil
 		})
 		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				_ = a.database.CompleteExecution(executionID, "", "cancelled", "", db.ExecutionMetrics{})
+				runtime.EventsEmit(a.ctx, "evoca:llm:cancelled", map[string]any{"id": requestID, "executionId": executionID})
+				return
+			}
 			_ = a.database.CompleteExecution(executionID, "", "error", err.Error(), db.ExecutionMetrics{})
 			runtime.EventsEmit(a.ctx, "evoca:llm:error", map[string]any{"id": requestID, "executionId": executionID, "error": err.Error()})
 			return

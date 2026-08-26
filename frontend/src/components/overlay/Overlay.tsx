@@ -31,6 +31,7 @@ export function Overlay({ configurations, onOpenSettings, onOpenHistory, provide
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
   const dragStart = useRef<Point | null>(null);
   const streamCleanup = useRef<(() => void) | null>(null);
+  const activeRequestId = useRef<string | null>(null);
 
   const filtered = useMemo(() => configurations.filter((x) => `${x.name} ${x.description ?? ""} ${x.model}`.toLowerCase().includes(query.toLowerCase())), [configurations, query]);
   const selected = configurations.find((x) => x.id === state.selected);
@@ -63,17 +64,27 @@ export function Overlay({ configurations, onOpenSettings, onOpenHistory, provide
     });
     const offDone = EventsOn("evoca:llm:done", (event: { id: string; output: string }) => {
       if (event?.id === requestId) {
+        activeRequestId.current = null;
         setStreaming(false); setLoadingStartedAt(null); state.setOutput(event.output || useOverlayStore.getState().output);
         offChunk(); offDone(); offError(); if (streamCleanup.current) streamCleanup.current = null;
       }
     });
     const offError = EventsOn("evoca:llm:error", (event: { id: string; error: string }) => {
       if (event?.id === requestId) {
+        activeRequestId.current = null;
         setStreaming(false); setLoadingStartedAt(null); state.setError(event.error || "LLM request failed");
         offChunk(); offDone(); offError(); if (streamCleanup.current) streamCleanup.current = null;
       }
     });
-    const cleanup = () => { offChunk(); offDone(); offError(); };
+    const offCancelled = EventsOn("evoca:llm:cancelled", (event: { id: string }) => {
+      if (event?.id === requestId) {
+        activeRequestId.current = null;
+        setStreaming(false); setLoadingStartedAt(null);
+        state.setOutput(""); state.setState("input");
+        offChunk(); offDone(); offError(); offCancelled(); if (streamCleanup.current) streamCleanup.current = null;
+      }
+    });
+    const cleanup = () => { offChunk(); offDone(); offError(); offCancelled(); };
     streamCleanup.current = cleanup;
     return cleanup;
   }
@@ -82,13 +93,25 @@ export function Overlay({ configurations, onOpenSettings, onOpenHistory, provide
     if (!selected || !state.input.trim() || streaming) return;
     streamCleanup.current?.(); streamCleanup.current = null;
     setStreaming(true); setLoadingStartedAt(Date.now()); state.setOutput(""); state.setState("loading");
-    const requestId = crypto.randomUUID(); listenToStream(requestId);
+    const requestId = crypto.randomUUID(); activeRequestId.current = requestId; listenToStream(requestId);
     try { await evoca.startConfigurationStream(selected.id, state.input, requestId); }
     catch (error) { setStreaming(false); setLoadingStartedAt(null); state.setError(String(error)); }
   }
 
   function backToConfigurations() {
+    if (activeRequestId.current) void evoca.cancelLLM(activeRequestId.current);
+    activeRequestId.current = null;
     streamCleanup.current?.(); streamCleanup.current = null; setStreaming(false); setLoadingStartedAt(null); state.backToSearch();
+  }
+
+  function cancelCurrentRequest() {
+    const requestId = activeRequestId.current;
+    if (requestId) void evoca.cancelLLM(requestId);
+    activeRequestId.current = null;
+    streamCleanup.current?.(); streamCleanup.current = null;
+    setStreaming(false); setLoadingStartedAt(null);
+    state.setOutput("");
+    state.setState("input");
   }
 
   async function beginScreenshot() {
@@ -126,7 +149,7 @@ export function Overlay({ configurations, onOpenSettings, onOpenHistory, provide
     if (!selected || !selection || streaming) return;
     setScreenshotPreview(null); setScreenshotImage(null); const shot = selection; setSelection(null);
     streamCleanup.current?.(); streamCleanup.current = null; setStreaming(true); setLoadingStartedAt(Date.now()); state.setOutput(""); state.setState("loading");
-    const requestId = crypto.randomUUID(); listenToStream(requestId);
+    const requestId = crypto.randomUUID(); activeRequestId.current = requestId; listenToStream(requestId);
     try { await evoca.startScreenshotStream(selected.id, state.input, requestId, Math.round(shot.x), Math.round(shot.y), Math.round(shot.width), Math.round(shot.height), Math.round(window.innerWidth), Math.round(window.innerHeight)); }
     catch (error) { setStreaming(false); setLoadingStartedAt(null); state.setError(String(error)); }
   }
@@ -156,9 +179,9 @@ export function Overlay({ configurations, onOpenSettings, onOpenHistory, provide
 
   if (state.state === "searching") return (
     <section className="h-full w-full overflow-hidden border border-evoca-line bg-[linear-gradient(180deg,rgba(18,21,27,.985),rgba(10,12,16,.995)),radial-gradient(circle_at_24%_0%,rgba(255,255,255,.04),transparent_34%)] shadow-[0_35px_100px_rgba(0,0,0,.58),0_12px_30px_rgba(0,0,0,.22),inset_0_1px_0_rgba(255,255,255,.035)] flex h-full flex-col">
-      <div className="flex items-center justify-between gap-3 border-b border-white/[.06] px-5 py-4 [--wails-draggable:drag]">
+      <div className="flex items-center justify-between border-b border-white/[.06] px-5 py-4 [--wails-draggable:drag]">
         <div className="flex items-center gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-[11px] border border-evoca-accent/20 bg-[#F5E8C5] text-[30px] text-[#1B1B1A] leading-none">✦</span><div><b className="text-[13px] font-semibold tracking-[-.01em] text-white">eVoca</b><small className="block text-[9px] text-white/32">LLM launcher</small></div></div>
-        <div className="flex items-center gap-1.5"><button className="rounded-[9px] border border-transparent bg-transparent px-2.5 py-1.5 text-[10px] font-medium text-white/52 transition hover:border-white/[.07] hover:bg-white/[.04] hover:text-white" onClick={onOpenHistory}>History</button><button className="rounded-[9px] border border-transparent bg-transparent px-2.5 py-1.5 text-[10px] font-medium text-white/52 transition hover:border-white/[.07] hover:bg-white/[.04] hover:text-white" onClick={onOpenSettings}>Settings</button></div>
+        <div className="flex items-center gap-1.5"><button className="grid h-7 w-7 place-items-center rounded-[9px] border border-transparent bg-transparent text-white/42 transition hover:border-white/[.07] hover:bg-white/[.04] hover:text-white" onClick={() => void evoca.hideOverlay()}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5"><path d="M6 9h12"/><path d="m8 12 4 4 4-4"/><path d="M5 5h14v14H5z"/></svg></button><button className="rounded-[9px] border border-transparent bg-transparent px-2.5 py-1.5 text-[10px] font-medium text-white/52 transition hover:border-white/[.07] hover:bg-white/[.04] hover:text-white" onClick={onOpenHistory}>History</button><button className="rounded-[9px] border border-transparent bg-transparent px-2.5 py-1.5 text-[10px] font-medium text-white/52 transition hover:border-white/[.07] hover:bg-white/[.04] hover:text-white" onClick={onOpenSettings}>Settings</button></div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col px-5 pb-5">
         <div className="relative mb-3"><input autoFocus className="h-12 w-full rounded-[14px] border border-white/[.08] bg-white/[.035] pl-11 pr-20 text-[13px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.025)] focus:border-evoca-accent/35 focus:bg-white/[.05] focus:ring-2 focus:ring-evoca-accent/[.07] placeholder:text-white/27" placeholder="Search configurations..." value={query} onChange={(e) => setQuery(e.target.value)} /></div>
@@ -181,9 +204,9 @@ export function Overlay({ configurations, onOpenSettings, onOpenHistory, provide
   if (state.state === "loading") {
     const elapsedSeconds = Math.floor(loadingElapsedMs / 1000);
     const thinkingLabel = elapsedSeconds >= 8 ? "Still thinking" : "Thinking";
-    return <section className="h-full w-full overflow-hidden border border-evoca-line bg-[linear-gradient(180deg,rgba(18,21,27,.985),rgba(10,12,16,.995)),radial-gradient(circle_at_24%_0%,rgba(255,255,255,.04),transparent_34%)] shadow-[0_35px_100px_rgba(0,0,0,.58),0_12px_30px_rgba(0,0,0,.22),inset_0_1px_0_rgba(255,255,255,.035)] flex h-full flex-col"><div className="flex min-h-14 items-center gap-2 border-b border-white/[.06] px-5 [--wails-draggable:drag]"><div className="flex min-w-0 flex-1 items-center gap-2.5"><button className="inline-flex items-center gap-1.5 rounded-[9px] border border-white/[.07] bg-white/[.03] px-2.5 py-1.5 text-[9px] font-semibold text-white/60 transition hover:bg-white/[.06] hover:text-white" onClick={backToConfigurations}>← Back</button><div><h2 className="m-0 truncate text-[12px] font-semibold text-white">{selected?.name}</h2><div className="text-[9px] text-white/30">{selected?.model || "Model"}</div></div></div></div>
-      <div className="min-h-0 flex-1 px-5 py-4">{state.output ? <div className="h-full min-h-[260px] overflow-auto rounded-[14px] border border-white/[.06] bg-[#0a0c10] p-4 leading-6 shadow-[inset_0_1px_0_rgba(255,255,255,.02)]"><Markdown source={state.output} /><span className="opacity-70 animate-[evoca-blink_1s_steps(2,start)_infinite]">▌</span></div> : <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-3 text-center"><span className="h-3 w-3 rounded-full bg-evoca-accent shadow-[0_0_24px_rgba(216,184,110,.3)] animate-[evoca-thinking_1.7s_ease-in-out_infinite]" aria-hidden="true" /><strong>{thinkingLabel}</strong><span className="text-[9px] text-white/24">{elapsedSeconds}s elapsed</span><span className="max-w-[260px] text-[9px] leading-5 text-white/25">eVoca is streaming the result as soon as the model produces visible output.</span></div>}
-        {state.output && <div className="flex items-center gap-2 border-t border-white/[.06] px-1 py-3 text-[9px] text-white/30"><span className="flex items-center gap-1"><i className="block h-1.5 w-1.5 rounded-full bg-white/45 animate-[evoca-pulse_1.2s_infinite_ease-in-out]"></i><i className="block h-1.5 w-1.5 rounded-full bg-white/45 animate-[evoca-pulse_1.2s_infinite_ease-in-out] [animation-delay:.15s]"></i><i className="block h-1.5 w-1.5 rounded-full bg-white/45 animate-[evoca-pulse_1.2s_infinite_ease-in-out] [animation-delay:.3s]"></i></span><span>Generating…</span></div>}</div></section>;
+    return <section className="h-full w-full overflow-hidden border border-evoca-line bg-[linear-gradient(180deg,rgba(18,21,27,.985),rgba(10,12,16,.995)),radial-gradient(circle_at_24%_0%,rgba(255,255,255,.04),transparent_34%)] shadow-[0_35px_100px_rgba(0,0,0,.58),0_12px_30px_rgba(0,0,0,.22),inset_0_1px_0_rgba(255,255,255,.035)] flex h-full flex-col"><div className="flex min-h-14 items-center gap-2 border-b border-white/[.06] px-5 [--wails-draggable:drag]"><div className="flex min-w-0 flex-1 items-center gap-2.5"><div><h2 className="m-0 truncate text-[12px] font-semibold text-white">{selected?.name}</h2><div className="text-[9px] text-white/30">{selected?.model || "Model"}</div></div></div></div>
+      <div className="min-h-0 flex-1 px-5 py-4">{state.output ? <div className="h-full min-h-[260px] overflow-auto rounded-[14px] border border-white/[.06] bg-[#0a0c10] p-4 leading-6 shadow-[inset_0_1px_0_rgba(255,255,255,.02)]"><Markdown source={state.output} /><span className="opacity-70 animate-[evoca-blink_1s_steps(2,start)_infinite]">▌</span></div> : <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-3 text-center"><span className="h-3 w-3 rounded-full bg-evoca-accent shadow-[0_0_24px_rgba(216,184,110,.3)] animate-[evoca-thinking_1.7s_ease-in-out_infinite]" aria-hidden="true" /><strong>{thinkingLabel}</strong><span className="text-[9px] text-white/24">{elapsedSeconds}s elapsed</span><span className="max-w-[260px] text-[9px] leading-5 text-white/25">eVoca is streaming the result as soon as the model produces visible output.</span><button type="button" className="mt-1 inline-flex items-center justify-center rounded-[10px] border border-red-200/10 bg-red-300/[.055] px-3 py-2 text-[10px] font-semibold text-evoca-danger transition hover:bg-red-300/[.1]" onClick={cancelCurrentRequest}>Cancel</button></div>}
+        {state.output && <div className="flex items-center gap-2 border-t border-white/[.06] px-1 py-3 text-[9px] text-white/30"><span className="flex items-center gap-1"><i className="block h-1.5 w-1.5 rounded-full bg-white/45 animate-[evoca-pulse_1.2s_infinite_ease-in-out]"></i><i className="block h-1.5 w-1.5 rounded-full bg-white/45 animate-[evoca-pulse_1.2s_infinite_ease-in-out] [animation-delay:.15s]"></i><i className="block h-1.5 w-1.5 rounded-full bg-white/45 animate-[evoca-pulse_1.2s_infinite_ease-in-out] [animation-delay:.3s]"></i></span><span>Generating…</span></div>}<div className="flex items-center justify-end border-t border-white/[.06] px-5 py-3"><button type="button" className="rounded-[10px] border border-red-200/10 bg-red-300/[.04] px-3 py-2 text-[9px] font-semibold text-red-100/60 transition hover:bg-red-300/[.08] hover:text-red-50" onClick={cancelCurrentRequest}>Cancel request</button></div></div></section>;
   }
 
   if (state.state === "input") {
