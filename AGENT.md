@@ -338,6 +338,13 @@ Only record durable architectural/product changes here. Do not append repetitive
 - Replaced the previous utility styling with a cohesive dark-first premium design system using the existing eVoca gold accent, standardized surfaces, controls, spacing, typography, and interaction states.
 - No backend/data-flow changes were required for the redesign
 
+### Phase 11 — Full Tailwind utility migration
+
+- Removed frontend component-level semantic style classes from `frontend/src/styles/app.css`.
+- Rebuilt the existing UI styling as Tailwind utility classes directly in the React/TSX markup, preserving the Phase 10 visual system, spacing, colors, borders, shadows, states, and responsive behavior.
+- Kept only Tailwind theme/base rules plus animation keyframes and the non-visual Wails drag-region behavior in the stylesheet.
+- No UI redesign or behavioral changes were introduced in this phase.
+
 ---
 
 ## Current Roadmap
@@ -355,6 +362,7 @@ Phase 7 -> Hidden screenshot capture process -> Done
 Phase 8 -> Configuration details, provider discovery & LLM loading -> Done
 Phase 9 -> Tailwind v4 UI rebuild -> Done
 Phase 10 -> Full Frontend Redesign -> Done
+Phase 11 -> Full Tailwind utility migration -> Done
 ```
 
 The exact next Phase may change; when it does, update the roadmap rather than keeping contradictory plans.
