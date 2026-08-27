@@ -469,8 +469,8 @@ export function Settings({ configurations, onChange, onClose }: Props) {
         <button type="button" className={`${section === "backup" ? "rounded-[9px] border-0 bg-transparent px-3 py-2 text-[10px] font-semibold text-white/35 transition hover:bg-white/[.035] hover:text-white/70 bg-white/[.075] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.04)]" : "rounded-[9px] border-0 bg-transparent px-3 py-2 text-[10px] font-semibold text-white/35 transition hover:bg-white/[.035] hover:text-white/70"}`} onClick={() => setSection("backup")}>Backup</button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden px-5 pb-5">
-        {message && <div className={`mb-3 rounded-[10px] border px-3 py-2 text-[9px] leading-4 ${message.toLowerCase().includes("successful") || message.toLowerCase().includes("saved") || message.toLowerCase().includes("changed") || message.toLowerCase().includes("found") || message.toLowerCase().includes("added") ? "border-emerald-200/10 bg-emerald-300/[.04] text-evoca-success" : "border-red-200/10 bg-red-300/[.04] text-evoca-danger"}`}>{message}</div>}
+      <div className="relative min-h-0 flex-1 overflow-hidden px-5 pb-5">
+        {message && <div className={`pointer-events-none absolute left-5 right-5 z-50 rounded-[10px] border px-3 py-2 text-[9px] leading-4 shadow-lg backdrop-blur-md transition-all duration-200 ${message.toLowerCase().includes("successful") || message.toLowerCase().includes("saved") || message.toLowerCase().includes("changed") || message.toLowerCase().includes("found") || message.toLowerCase().includes("added") ? "border-emerald-200/10 bg-emerald-300/[.04] text-evoca-success" : "border-red-200/10 bg-red-300/[.04] text-evoca-danger"}`}>{message}</div>}
 
         {section === "general" ? (
           <div className="h-full min-h-0 overflow-y-auto pr-1">
