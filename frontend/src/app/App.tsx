@@ -36,8 +36,16 @@ export default function App() {
     return () => { cancel(); restored(); };
   }, [open]);
 
+  useEffect(() => {
+    const restoreWebViewFocus = () => {
+      window.requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-evoca-root]")?.focus());
+    };
+    window.addEventListener("focus", restoreWebViewFocus);
+    return () => window.removeEventListener("focus", restoreWebViewFocus);
+  }, []);
+
   return (
-    <div className="h-full w-full bg-[radial-gradient(circle_at_14%_-5%,rgba(216,184,110,.07),transparent_30%),radial-gradient(circle_at_100%_100%,rgba(96,106,140,.05),transparent_34%),linear-gradient(180deg,#090b0f,#08090c_60%,#07080a)]">
+    <div data-evoca-root tabIndex={-1} className="h-full w-full outline-none bg-[radial-gradient(circle_at_14%_-5%,rgba(216,184,110,.07),transparent_30%),radial-gradient(circle_at_100%_100%,rgba(96,106,140,.05),transparent_34%),linear-gradient(180deg,#090b0f,#08090c_60%,#07080a)]">
       {showHistory ? (
         <HistoryPanel configurations={configurations} onClose={() => setShowHistory(false)} onRunAgain={(execution) => { setShowHistory(false); window.setTimeout(() => EventsEmit("evoca:run-again", { executionId: execution.id }), 50); }} />
       ) : showSettings ? (

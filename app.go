@@ -101,6 +101,13 @@ func (a *App) ToggleOverlay() {
 	runtime.WindowShow(a.ctx)
 	runtime.WindowSetAlwaysOnTop(a.ctx, true)
 	runtime.WindowCenter(a.ctx)
+	// Wails/WebView2 can restore the host window without restoring WebView input focus.
+	// Nudge the renderer after activation so the first interaction is not consumed by focus recovery.
+	time.AfterFunc(40*time.Millisecond, func() {
+		if a.ctx != nil {
+			runtime.WindowExecJS(a.ctx, `(function(){var el=document.querySelector('[data-evoca-root]'); if(el){el.focus();}})();`)
+		}
+	})
 
 	a.overlayVisible = true
 }
@@ -526,6 +533,14 @@ func (a *App) CancelLLM(requestID string) error {
 }
 
 func (a *App) StartConfigurationStream(id, input, requestID string) error {
+	return a.startConfigurationStream(id, input, requestID, "")
+}
+
+func (a *App) StartConfigurationStreamWithModel(id, input, requestID, model string) error {
+	return a.startConfigurationStream(id, input, requestID, strings.TrimSpace(model))
+}
+
+func (a *App) startConfigurationStream(id, input, requestID, modelOverride string) error {
 	if a.database == nil {
 		return fmt.Errorf("database is not initialized")
 	}
@@ -537,19 +552,26 @@ func (a *App) StartConfigurationStream(id, input, requestID string) error {
 	if err != nil {
 		return err
 	}
+	model := strings.TrimSpace(configuration.Model)
+	if modelOverride != "" {
+		model = modelOverride
+	}
+	if model == "" {
+		return fmt.Errorf("model is required")
+	}
 	if err := a.database.MarkConfigurationUsed(id); err != nil {
 		return err
 	}
-	executionID, err := a.database.RecordExecutionStart(id, configuration.Model, "text", input, configuration.Spell, "")
+	executionID, err := a.database.RecordExecutionStart(id, model, "text", input, configuration.Spell, "")
 	if err != nil {
 		return err
 	}
-	runtime.EventsEmit(a.ctx, "evoca:llm:start", map[string]any{"id": requestID, "executionId": executionID})
+	runtime.EventsEmit(a.ctx, "evoca:llm:start", map[string]any{"id": requestID, "executionId": executionID, "model": model})
 	requestCtx, cancel := a.registerStream(requestID)
 	go func() {
 		defer cancel()
 		defer a.unregisterStream(requestID)
-		result, err := a.providers.GenerateStream(requestCtx, provider, llm.Request{Model: configuration.Model, Spell: configuration.Spell, Input: input, Temperature: configuration.Temperature, MaxTokens: configuration.MaxTokens, OutputType: configuration.OutputType}, func(chunk string) error {
+		result, err := a.providers.GenerateStream(requestCtx, provider, llm.Request{Model: model, Spell: configuration.Spell, Input: input, Temperature: configuration.Temperature, MaxTokens: configuration.MaxTokens, OutputType: configuration.OutputType}, func(chunk string) error {
 			runtime.EventsEmit(a.ctx, "evoca:llm:chunk", map[string]any{"id": requestID, "chunk": chunk})
 			return nil
 		})
@@ -565,7 +587,7 @@ func (a *App) StartConfigurationStream(id, input, requestID string) error {
 		}
 		metrics := db.ExecutionMetrics{DurationMs: result.Metrics.DurationMs, FirstTokenMs: result.Metrics.FirstTokenMs, InputTokens: result.Metrics.InputTokens, OutputTokens: result.Metrics.OutputTokens, TotalTokens: result.Metrics.TotalTokens, TokensPerSec: result.Metrics.TokensPerSec}
 		_ = a.database.CompleteExecution(executionID, result.Text, "success", "", metrics)
-		runtime.EventsEmit(a.ctx, "evoca:llm:done", map[string]any{"id": requestID, "executionId": executionID, "output": result.Text, "metrics": result.Metrics})
+		runtime.EventsEmit(a.ctx, "evoca:llm:done", map[string]any{"id": requestID, "executionId": executionID, "output": result.Text, "metrics": result.Metrics, "model": model})
 	}()
 	return nil
 }

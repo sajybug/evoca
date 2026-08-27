@@ -390,6 +390,14 @@ Only record durable architectural/product changes here. Do not append repetitive
 - Added **Duplicate Configuration** with a fresh ID, reset usage metadata, and collision-safe copy naming.
 - Added automatic SQLite schema migration for the new configuration metadata fields.
 
+### Phase 17 — Configuration views, chat model override & focus recovery
+
+- Added persistent Grid/List switching for the launcher Configuration cards using local WebView storage.
+- Added per-chat Model selection from the active Provider's available models without mutating the saved Configuration.
+- Added **Stop generating** labeling for the existing generation-time cancellation control while leaving the Thinking **Cancel** behavior unchanged.
+- Added WebView focus recovery when the overlay is shown or the app window regains focus to mitigate the first-click-after-deactivation issue.
+- Extended the configuration streaming backend to accept a per-request Model override; no database migration is required.
+
 ## Current Roadmap
 
 The completed phases are located here.
@@ -411,6 +419,7 @@ Phase 13 -> Windows startup, provider persistence, scalable dropdowns & secure c
 Phase 14 —> Screenshot capture compositor timing fix & DWM cloak -> Done
 Phase 15 -> Markdown Rendering Enhancement -> Done
 Phase 16 -> Launcher configuration productivity -> Done
+Phase 17 -> Configuration views, chat model override & focus recovery -> Done
 ```
 
 The exact next Phase may change; when it does, update the roadmap rather than keeping contradictory plans.

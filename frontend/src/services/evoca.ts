@@ -3,6 +3,7 @@ import {
   GetProviders,
   InvokeConfiguration,
   StartConfigurationStream,
+  StartConfigurationStreamWithModel,
   StartExecutionStream,
   HideOverlay,
   Quit,
@@ -87,6 +88,10 @@ export const evoca = {
 
   startConfigurationStream(id: string, input: string, requestId: string): Promise<void> {
     return StartConfigurationStream(id, input, requestId);
+  },
+
+  startConfigurationStreamWithModel(id: string, input: string, requestId: string, model: string): Promise<void> {
+    return StartConfigurationStreamWithModel(id, input, requestId, model);
   },
 
   startExecutionStream(executionId: string, requestId: string): Promise<void> {
