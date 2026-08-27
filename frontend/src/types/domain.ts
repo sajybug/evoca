@@ -10,6 +10,9 @@ export interface Configuration {
   outputType: string;
   temperature?: number;
   maxTokens?: number;
+  pinned: boolean;
+  lastUsedAt: number;
+  useCount: number;
   createdAt: number;
   updatedAt: number;
 }

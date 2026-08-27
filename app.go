@@ -348,6 +348,20 @@ func (a *App) SaveConfiguration(configuration db.Configuration) error {
 	return a.database.SaveConfiguration(configuration)
 }
 
+func (a *App) SetConfigurationPinned(id string, pinned bool) error {
+	if a.database == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	return a.database.SetConfigurationPinned(id, pinned)
+}
+
+func (a *App) DuplicateConfiguration(id string) (db.Configuration, error) {
+	if a.database == nil {
+		return db.Configuration{}, fmt.Errorf("database is not initialized")
+	}
+	return a.database.DuplicateConfiguration(id)
+}
+
 func (a *App) DeleteConfiguration(id string) error {
 	if a.database == nil {
 		return fmt.Errorf("database is not initialized")
@@ -523,6 +537,9 @@ func (a *App) StartConfigurationStream(id, input, requestID string) error {
 	if err != nil {
 		return err
 	}
+	if err := a.database.MarkConfigurationUsed(id); err != nil {
+		return err
+	}
 	executionID, err := a.database.RecordExecutionStart(id, configuration.Model, "text", input, configuration.Spell, "")
 	if err != nil {
 		return err
@@ -581,6 +598,9 @@ func (a *App) StartScreenshotStream(id, input, requestID string, x, y, width, he
 	runtime.WindowUnfullscreen(a.ctx)
 	runtime.WindowShow(a.ctx)
 	runtime.WindowSetAlwaysOnTop(a.ctx, true)
+	if err := a.database.MarkConfigurationUsed(id); err != nil {
+		return err
+	}
 	executionID, err := a.database.RecordExecutionStart(id, configuration.Model, "screenshot", input, configuration.Spell, imageBase64)
 	if err != nil {
 		return err
@@ -607,6 +627,62 @@ func (a *App) StartScreenshotStream(id, input, requestID string, x, y, width, he
 		metrics := db.ExecutionMetrics{DurationMs: result.Metrics.DurationMs, FirstTokenMs: result.Metrics.FirstTokenMs, InputTokens: result.Metrics.InputTokens, OutputTokens: result.Metrics.OutputTokens, TotalTokens: result.Metrics.TotalTokens, TokensPerSec: result.Metrics.TokensPerSec}
 		_ = a.database.CompleteExecution(executionID, result.Text, "success", "", metrics)
 		runtime.EventsEmit(a.ctx, "evoca:llm:done", map[string]any{"id": requestID, "executionId": executionID, "output": result.Text, "metrics": result.Metrics})
+	}()
+	return nil
+}
+
+func (a *App) StartExecutionStream(executionID, requestID string) error {
+	if a.database == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	execution, err := a.database.GetExecution(executionID)
+	if err != nil {
+		return err
+	}
+	configuration, err := a.database.GetConfiguration(execution.ConfigurationID)
+	if err != nil {
+		return err
+	}
+	provider, err := a.database.GetProvider(configuration.ProviderID)
+	if err != nil {
+		return err
+	}
+	if err := a.database.MarkConfigurationUsed(configuration.ID); err != nil {
+		return err
+	}
+	imageBase64 := ""
+	if execution.RequestType == "screenshot" {
+		imageBase64 = execution.ImageData
+		if imageBase64 == "" {
+			return fmt.Errorf("the original screenshot is no longer available")
+		}
+	}
+	newExecutionID, err := a.database.RecordExecutionStart(configuration.ID, configuration.Model, execution.RequestType, execution.Input, configuration.Spell, imageBase64)
+	if err != nil {
+		return err
+	}
+	runtime.EventsEmit(a.ctx, "evoca:llm:start", map[string]any{"id": requestID, "executionId": newExecutionID})
+	requestCtx, cancel := a.registerStream(requestID)
+	go func() {
+		defer cancel()
+		defer a.unregisterStream(requestID)
+		result, err := a.providers.GenerateStream(requestCtx, provider, llm.Request{Model: configuration.Model, Spell: configuration.Spell, Input: execution.Input, ImageBase64: imageBase64, Temperature: configuration.Temperature, MaxTokens: configuration.MaxTokens, OutputType: configuration.OutputType}, func(chunk string) error {
+			runtime.EventsEmit(a.ctx, "evoca:llm:chunk", map[string]any{"id": requestID, "chunk": chunk})
+			return nil
+		})
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				_ = a.database.CompleteExecution(newExecutionID, "", "cancelled", "", db.ExecutionMetrics{})
+				runtime.EventsEmit(a.ctx, "evoca:llm:cancelled", map[string]any{"id": requestID, "executionId": newExecutionID})
+				return
+			}
+			_ = a.database.CompleteExecution(newExecutionID, "", "error", err.Error(), db.ExecutionMetrics{})
+			runtime.EventsEmit(a.ctx, "evoca:llm:error", map[string]any{"id": requestID, "executionId": newExecutionID, "error": err.Error()})
+			return
+		}
+		metrics := db.ExecutionMetrics{DurationMs: result.Metrics.DurationMs, FirstTokenMs: result.Metrics.FirstTokenMs, InputTokens: result.Metrics.InputTokens, OutputTokens: result.Metrics.OutputTokens, TotalTokens: result.Metrics.TotalTokens, TokensPerSec: result.Metrics.TokensPerSec}
+		_ = a.database.CompleteExecution(newExecutionID, result.Text, "success", "", metrics)
+		runtime.EventsEmit(a.ctx, "evoca:llm:done", map[string]any{"id": requestID, "executionId": newExecutionID, "output": result.Text, "metrics": result.Metrics})
 	}()
 	return nil
 }

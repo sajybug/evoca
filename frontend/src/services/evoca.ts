@@ -3,10 +3,13 @@ import {
   GetProviders,
   InvokeConfiguration,
   StartConfigurationStream,
+  StartExecutionStream,
   HideOverlay,
   Quit,
   SaveConfiguration,
   DeleteConfiguration,
+  SetConfigurationPinned,
+  DuplicateConfiguration,
   SaveProvider,
   DeleteProvider,
   GetProviderModels,
@@ -84,6 +87,10 @@ export const evoca = {
 
   startConfigurationStream(id: string, input: string, requestId: string): Promise<void> {
     return StartConfigurationStream(id, input, requestId);
+  },
+
+  startExecutionStream(executionId: string, requestId: string): Promise<void> {
+    return StartExecutionStream(executionId, requestId);
   },
 
   hideOverlay(): Promise<void> {
@@ -178,5 +185,13 @@ export const evoca = {
 
   deleteConfiguration(id: string): Promise<void> {
     return DeleteConfiguration(id);
+  },
+
+  setConfigurationPinned(id: string, pinned: boolean): Promise<void> {
+    return SetConfigurationPinned(id, pinned);
+  },
+
+  duplicateConfiguration(id: string): Promise<Configuration> {
+    return DuplicateConfiguration(id);
   },
 };

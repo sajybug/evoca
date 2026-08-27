@@ -76,6 +76,9 @@ func (d *DB) initializeSchema() error {
 			output_type TEXT NOT NULL DEFAULT 'text',
 			temperature REAL,
 			max_tokens INTEGER,
+			pinned INTEGER NOT NULL DEFAULT 0,
+			last_used_at INTEGER NOT NULL DEFAULT 0,
+			use_count INTEGER NOT NULL DEFAULT 0,
 			created_at INTEGER NOT NULL,
 			updated_at INTEGER NOT NULL
 		);
@@ -129,6 +132,15 @@ func (d *DB) initializeSchema() error {
 	}
 	if err := d.ensureColumn("providers", "headers_json", "TEXT"); err != nil {
 		return err
+	}
+	for _, column := range []struct{ name, definition string }{
+		{"pinned", "INTEGER NOT NULL DEFAULT 0"},
+		{"last_used_at", "INTEGER NOT NULL DEFAULT 0"},
+		{"use_count", "INTEGER NOT NULL DEFAULT 0"},
+	} {
+		if err := d.ensureColumn("configurations", column.name, column.definition); err != nil {
+			return err
+		}
 	}
 	for _, column := range []struct{ name, definition string }{
 		{"model", "TEXT NOT NULL DEFAULT ''"},
@@ -250,8 +262,9 @@ func (d *DB) SaveSetting(key, value string) error {
 func (d *DB) ListConfigurations() ([]Configuration, error) {
 	rows, err := d.conn.Query(`
 		SELECT id,name,description,icon,provider_id,model,spell,input_type,output_type,
-		       temperature,max_tokens,created_at,updated_at
-		FROM configurations ORDER BY name
+		       temperature,max_tokens,pinned,last_used_at,use_count,created_at,updated_at
+		FROM configurations
+		ORDER BY pinned DESC, last_used_at DESC, use_count DESC, updated_at DESC, name COLLATE NOCASE
 	`)
 	if err != nil {
 		return nil, err
@@ -263,7 +276,7 @@ func (d *DB) ListConfigurations() ([]Configuration, error) {
 		var s Configuration
 		if err := rows.Scan(
 			&s.ID, &s.Name, &s.Description, &s.Icon, &s.ProviderID, &s.Model, &s.Spell,
-			&s.InputType, &s.OutputType, &s.Temperature, &s.MaxTokens, &s.CreatedAt, &s.UpdatedAt,
+			&s.InputType, &s.OutputType, &s.Temperature, &s.MaxTokens, &s.Pinned, &s.LastUsedAt, &s.UseCount, &s.CreatedAt, &s.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -276,11 +289,11 @@ func (d *DB) GetConfiguration(id string) (Configuration, error) {
 	var s Configuration
 	err := d.conn.QueryRow(`
 		SELECT id,name,description,icon,provider_id,model,spell,input_type,output_type,
-		       temperature,max_tokens,created_at,updated_at
+		       temperature,max_tokens,pinned,last_used_at,use_count,created_at,updated_at
 		FROM configurations WHERE id=?
 	`, id).Scan(
 		&s.ID, &s.Name, &s.Description, &s.Icon, &s.ProviderID, &s.Model, &s.Spell,
-		&s.InputType, &s.OutputType, &s.Temperature, &s.MaxTokens, &s.CreatedAt, &s.UpdatedAt,
+		&s.InputType, &s.OutputType, &s.Temperature, &s.MaxTokens, &s.Pinned, &s.LastUsedAt, &s.UseCount, &s.CreatedAt, &s.UpdatedAt,
 	)
 	return s, err
 }
@@ -323,8 +336,8 @@ func (d *DB) SaveConfiguration(s Configuration) error {
 	_, err := d.conn.Exec(`
 		INSERT INTO configurations (
 		  id,name,description,icon,provider_id,model,spell,input_type,output_type,
-		  temperature,max_tokens,created_at,updated_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+		  temperature,max_tokens,pinned,last_used_at,use_count,created_at,updated_at
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(id) DO UPDATE SET
 		  name=excluded.name,
 		  description=excluded.description,
@@ -339,9 +352,75 @@ func (d *DB) SaveConfiguration(s Configuration) error {
 		  updated_at=excluded.updated_at
 	`,
 		s.ID, s.Name, s.Description, s.Icon, s.ProviderID, s.Model, s.Spell,
-		s.InputType, s.OutputType, s.Temperature, s.MaxTokens, s.CreatedAt, s.UpdatedAt,
+		s.InputType, s.OutputType, s.Temperature, s.MaxTokens, s.Pinned, s.LastUsedAt, s.UseCount, s.CreatedAt, s.UpdatedAt,
 	)
 	return err
+}
+
+func (d *DB) SetConfigurationPinned(id string, pinned bool) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return fmt.Errorf("configuration id is required")
+	}
+	result, err := d.conn.Exec(`UPDATE configurations SET pinned=? WHERE id=?`, boolToInt(pinned), id)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return fmt.Errorf("configuration %q does not exist", id)
+	}
+	return nil
+}
+
+func (d *DB) MarkConfigurationUsed(id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return fmt.Errorf("configuration id is required")
+	}
+	_, err := d.conn.Exec(`UPDATE configurations SET last_used_at=?, use_count=use_count+1 WHERE id=?`, time.Now().UnixMilli(), id)
+	return err
+}
+
+func (d *DB) DuplicateConfiguration(id string) (Configuration, error) {
+	original, err := d.GetConfiguration(id)
+	if err != nil {
+		return Configuration{}, err
+	}
+	baseName := strings.TrimSpace(original.Name)
+	name := "Copy of " + baseName
+	for index := 2; ; index++ {
+		var exists int
+		if err := d.conn.QueryRow(`SELECT COUNT(1) FROM configurations WHERE name=?`, name).Scan(&exists); err != nil {
+			return Configuration{}, err
+		}
+		if exists == 0 {
+			break
+		}
+		name = fmt.Sprintf("Copy of %s (%d)", baseName, index)
+	}
+	duplicate := original
+	duplicate.ID = uuid.NewString()
+	duplicate.Name = name
+	duplicate.Pinned = false
+	duplicate.LastUsedAt = 0
+	duplicate.UseCount = 0
+	duplicate.CreatedAt = 0
+	duplicate.UpdatedAt = 0
+	if err := d.SaveConfiguration(duplicate); err != nil {
+		return Configuration{}, err
+	}
+	return d.GetConfiguration(duplicate.ID)
+}
+
+func boolToInt(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 func (d *DB) DeleteConfiguration(id string) error {

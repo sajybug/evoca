@@ -83,6 +83,9 @@ const freshConfiguration = (providers: Provider[]): Configuration => ({
   outputType: "text",
   temperature: 0.2,
   maxTokens: 2000,
+  pinned: false,
+  lastUsedAt: 0,
+  useCount: 0,
   createdAt: 0,
   updatedAt: 0,
 });
@@ -388,6 +391,31 @@ export function Settings({ configurations, onChange, onClose }: Props) {
     }
   }
 
+  async function togglePinnedConfiguration() {
+    if (!configuration?.id) return;
+    try {
+      await evoca.setConfigurationPinned(configuration.id, !configuration.pinned);
+      onChange(await evoca.getConfigurations());
+      setConfiguration((current) => current ? { ...current, pinned: !current.pinned } : current);
+      setMessage(!configuration.pinned ? "Configuration pinned." : "Configuration unpinned.");
+    } catch (error) {
+      setMessage(`Pin change failed: ${String(error)}`);
+    }
+  }
+
+  async function duplicateConfiguration() {
+    if (!configuration?.id) return;
+    try {
+      const duplicate = await evoca.duplicateConfiguration(configuration.id);
+      const nextConfigurations = await evoca.getConfigurations();
+      onChange(nextConfigurations);
+      setConfiguration(nextConfigurations.find((item) => item.id === duplicate.id) ?? duplicate);
+      setMessage("Configuration duplicated successfully.");
+    } catch (error) {
+      setMessage(`Duplicate failed: ${String(error)}`);
+    }
+  }
+
   async function saveConfiguration() {
     if (!configuration) return;
 
@@ -507,7 +535,7 @@ export function Settings({ configurations, onChange, onClose }: Props) {
                   <div className="mb-3 flex items-center justify-between"><div><div className={settingsSectionMetaClass}>Generation</div><p className={settingsBodyClass}>Keep these values close to the task rather than the provider.</p></div></div>
                   <div className="grid grid-cols-2 gap-3"><label className={settingsLabelClass}>Temperature<input className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25" type="number" step="0.1" min="0" max="2" value={configuration.temperature ?? 0.2} onChange={e => setConfiguration({...configuration,temperature:Number(e.target.value)})}/></label><label className={settingsLabelClass}>Max tokens<input className="w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25" type="number" min="1" value={configuration.maxTokens ?? 2000} onChange={e => setConfiguration({...configuration,maxTokens:Number(e.target.value)})}/></label></div>
                 </div>
-                <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/[.06] pt-4"><button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white disabled:opacity-40 !border-red-200/10 !bg-red-300/[.055] !text-evoca-danger hover:!bg-red-300/[.09]" onClick={() => setConfirm({ kind: "configuration", id: configuration.id })}>Delete</button><div className="flex items-center gap-2"><small className="text-[8px] text-white/25">{configuration.providerId ? "Ready to save" : "Select a provider and model"}</small><button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white disabled:opacity-40 !border-evoca-accent/35 !bg-evoca-accent !text-[#18170f] !shadow-[0_8px_22px_rgba(216,184,110,.13)] hover:!bg-evoca-accent-2" disabled={saving} onClick={() => void saveConfiguration()}>{saving ? "Saving…" : "Save configuration"}</button></div></div>
+                <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/[.06] pt-4"><div className="flex items-center gap-2"><button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white" onClick={() => void togglePinnedConfiguration()}>{configuration.pinned ? "Unpin" : "Pin"}</button><button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white" onClick={() => void duplicateConfiguration()}>Duplicate</button><button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white disabled:opacity-40 !border-red-200/10 !bg-red-300/[.055] !text-evoca-danger hover:!bg-red-300/[.09]" onClick={() => setConfirm({ kind: "configuration", id: configuration.id })}>Delete</button><div className="flex items-center gap-2"><small className="text-[8px] text-white/25">{configuration.providerId ? "Ready to save" : "Select a provider and model"}</small><button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white disabled:opacity-40 !border-evoca-accent/35 !bg-evoca-accent !text-[#18170f] !shadow-[0_8px_22px_rgba(216,184,110,.13)] hover:!bg-evoca-accent-2" disabled={saving} onClick={() => void saveConfiguration()}>{saving ? "Saving…" : "Save configuration"}</button></div></div></div>
               </div> : <div className="rounded-[16px] border border-white/[.06] bg-white/[.018] p-4 flex min-h-[160px] flex-1 items-center justify-center text-center text-[10px] text-white/28">Create a configuration from the left panel to begin.</div>}
             </div>
           </div>

@@ -12,6 +12,9 @@ type Configuration struct {
 	OutputType  string   `json:"outputType"`
 	Temperature *float32 `json:"temperature,omitempty"`
 	MaxTokens   *int64   `json:"maxTokens,omitempty"`
+	Pinned      bool     `json:"pinned"`
+	LastUsedAt  int64    `json:"lastUsedAt"`
+	UseCount    int64    `json:"useCount"`
 	CreatedAt   int64    `json:"createdAt"`
 	UpdatedAt   int64    `json:"updatedAt"`
 }

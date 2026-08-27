@@ -35,7 +35,42 @@ export function Overlay({ configurations, onOpenSettings, onOpenHistory, provide
   const [hotkey, setHotkey] = useState("Ctrl+Space");
 
   const filtered = useMemo(() => configurations.filter((x) => `${x.name} ${x.description ?? ""} ${x.model}`.toLowerCase().includes(query.toLowerCase())), [configurations, query]);
+  const pinned = useMemo(() => filtered.filter((x) => x.pinned), [filtered]);
+  const recent = useMemo(() => filtered.filter((x) => !x.pinned && x.lastUsedAt > 0).slice(0, 5), [filtered]);
+  const recentIds = useMemo(() => new Set(recent.map((x) => x.id)), [recent]);
+  const all = useMemo(() => filtered.filter((x) => !x.pinned && !recentIds.has(x.id)), [filtered, recentIds]);
   const selected = configurations.find((x) => x.id === state.selected);
+
+  async function runAgain(executionId: string) {
+    try {
+      const execution = await evoca.getExecution(executionId);
+      const configuration = configurations.find((item) => item.id === execution.configurationId);
+      if (!configuration) {
+        state.setError("The configuration used by this History entry no longer exists.");
+        return;
+      }
+      setQuery("");
+      state.select(configuration.id);
+      state.setInput(execution.input || "");
+      streamCleanup.current?.(); streamCleanup.current = null;
+      setStreaming(true); setLoadingStartedAt(Date.now()); state.setOutput(""); state.setState("loading");
+      const requestId = crypto.randomUUID();
+      activeRequestId.current = requestId;
+      listenToStream(requestId);
+      await evoca.startExecutionStream(execution.id, requestId);
+    } catch (error) {
+      activeRequestId.current = null;
+      setStreaming(false); setLoadingStartedAt(null);
+      state.setError(String(error));
+    }
+  }
+
+  useEffect(() => {
+    const off = EventsOn("evoca:run-again", (event: { executionId?: string }) => {
+      if (event?.executionId) void runAgain(event.executionId);
+    });
+    return () => off();
+  }, [configurations]);
 
   useEffect(() => {
     evoca.getHotkey().then((value) => setHotkey(value || "Ctrl+Space")).catch(() => setHotkey("Ctrl+Space"));
@@ -191,15 +226,11 @@ export function Overlay({ configurations, onOpenSettings, onOpenHistory, provide
       <div className="flex min-h-0 flex-1 flex-col px-5 pb-5">
         <div className="relative mb-3"><input autoFocus className="h-12 w-full rounded-[14px] border border-white/[.08] bg-white/[.035] pl-11 pr-20 text-[13px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.025)] focus:border-evoca-accent/35 focus:bg-white/[.05] focus:ring-2 focus:ring-evoca-accent/[.07] placeholder:text-white/27" placeholder="Search configurations..." value={query} onChange={(e) => setQuery(e.target.value)} /></div>
         <div className="mb-3 flex items-center justify-between"><span className="text-[9px] font-medium uppercase tracking-[.15em] text-white/28">{filtered.length} configurations</span><small className="text-[9px] text-white/24">Choose one to start a run</small></div>
-        <div className="min-h-0 flex-1 flex flex-col gap-1.5 overflow-y-auto overflow-x-hidden pr-1">
-          {filtered.length ? filtered.map((item) => {
-            const provider = providers.find((p) => p.id === item.providerId);
-            return <button className="flex w-full items-center gap-3 rounded-[14px] border border-transparent bg-transparent p-2.5 text-left text-inherit transition hover:border-white/[.07] hover:bg-white/[.035]" key={item.id} onClick={() => state.select(item.id)}>
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] border border-white/[.07] bg-white/[.035] text-[14px] text-evoca-accent shadow-[inset_0_1px_0_rgba(255,255,255,.03)]">{item.icon || "✦"}</span>
-              <span className="min-w-0 flex-1"><b className="block truncate text-[12px] font-semibold text-white/92">{item.name}</b><small className="mt-0.5 block truncate text-[9px] text-white/34">{item.description || "Ready for a new run"}</small><small className="mt-0.5 block truncate !text-white/24">{provider?.name || "No provider"} · {item.model || "No model"}</small></span>
-              <span className="flex shrink-0 items-center gap-1.5"><span className="rounded-full border border-white/[.06] bg-white/[.025] px-2 py-1 text-[8px] font-medium text-white/35">{item.inputType === "text" ? "Text" : item.inputType}</span><span className="text-[11px] text-white/20">→</span></span>
-            </button>;
-          }) : <div className="flex min-h-[160px] flex-1 items-center justify-center text-center text-[10px] text-white/28">No configurations match “{query}”.</div>}
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
+          {!filtered.length && <div className="flex min-h-[160px] items-center justify-center text-center text-[10px] text-white/28">No configurations match “{query}”.</div>}
+          {pinned.length > 0 && <div className="mb-4"><div className="mb-1.5 flex items-center justify-between"><span className="text-[8px] font-semibold uppercase tracking-[.14em] text-evoca-accent/70">Pinned</span><span className="text-[8px] text-white/22">{pinned.length}</span></div><div className="flex flex-col gap-1.5">{pinned.map((item) => { const provider = providers.find((p) => p.id === item.providerId); return <button className="flex w-full items-center gap-3 rounded-[14px] border border-evoca-accent/10 bg-evoca-accent/[.025] p-2.5 text-left text-inherit transition hover:border-evoca-accent/20 hover:bg-evoca-accent/[.05]" key={item.id} onClick={() => state.select(item.id)}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] border border-evoca-accent/15 bg-white/[.035] text-[14px] text-evoca-accent">{item.icon || "✦"}</span><span className="min-w-0 flex-1"><b className="block truncate text-[12px] font-semibold text-white/92">{item.name}</b><small className="mt-0.5 block truncate text-[9px] text-white/34">{item.description || "Ready for a new run"}</small><small className="mt-0.5 block truncate text-white/24">{provider?.name || "No provider"} · {item.model || "No model"}</small></span><span className="text-[10px] text-evoca-accent">★</span></button>; })}</div></div>}
+          {recent.length > 0 && <div className="mb-4"><div className="mb-1.5 flex items-center justify-between"><span className="text-[8px] font-semibold uppercase tracking-[.14em] text-white/38">Recent</span><span className="text-[8px] text-white/22">{recent.length}</span></div><div className="flex flex-col gap-1.5">{recent.map((item) => { const provider = providers.find((p) => p.id === item.providerId); return <button className="flex w-full items-center gap-3 rounded-[14px] border border-transparent bg-transparent p-2.5 text-left text-inherit transition hover:border-white/[.07] hover:bg-white/[.035]" key={item.id} onClick={() => state.select(item.id)}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] border border-white/[.07] bg-white/[.035] text-[14px] text-evoca-accent">{item.icon || "✦"}</span><span className="min-w-0 flex-1"><b className="block truncate text-[12px] font-semibold text-white/92">{item.name}</b><small className="mt-0.5 block truncate text-[9px] text-white/34">Used {item.useCount} {item.useCount === 1 ? "time" : "times"} · {provider?.name || "No provider"} · {item.model || "No model"}</small></span><span className="text-[11px] text-white/20">→</span></button>; })}</div></div>}
+          {all.length > 0 && <div><div className="mb-1.5 text-[8px] font-semibold uppercase tracking-[.14em] text-white/25">All configurations</div><div className="flex flex-col gap-1.5">{all.map((item) => { const provider = providers.find((p) => p.id === item.providerId); return <button className="flex w-full items-center gap-3 rounded-[14px] border border-transparent bg-transparent p-2.5 text-left text-inherit transition hover:border-white/[.07] hover:bg-white/[.035]" key={item.id} onClick={() => state.select(item.id)}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] border border-white/[.07] bg-white/[.035] text-[14px] text-evoca-accent">{item.icon || "✦"}</span><span className="min-w-0 flex-1"><b className="block truncate text-[12px] font-semibold text-white/92">{item.name}</b><small className="mt-0.5 block truncate text-[9px] text-white/34">{item.description || "Ready for a new run"}</small><small className="mt-0.5 block truncate text-white/24">{provider?.name || "No provider"} · {item.model || "No model"}</small></span><span className="flex shrink-0 items-center gap-1.5"><span className="rounded-full border border-white/[.06] bg-white/[.025] px-2 py-1 text-[8px] font-medium text-white/35">{item.inputType === "text" ? "Text" : item.inputType}</span><span className="text-[11px] text-white/20">→</span></span></button>; })}</div></div>}
         </div>
         <div className="mt-3 flex items-center justify-between"><span className="text-[9px] text-white/24">Reusable AI workflows, not a chat inbox.</span><div className="flex items-center gap-1.5"><kbd className="rounded-[6px] border border-white/[.08] bg-white/[.025] px-1.5 py-1 font-mono text-[8px] text-white/33">{hotkey}</kbd><span className="text-[9px] text-white/24">Toggle</span></div></div>
       </div>

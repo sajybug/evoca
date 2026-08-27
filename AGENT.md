@@ -382,6 +382,14 @@ Only record durable architectural/product changes here. Do not append repetitive
 
 - Improve Markdown rendering with GFM tables, code blocks, syntax highlighting, and LaTeX math support.
 
+### Phase 16 — Launcher configuration productivity
+
+- Added History **Run Again** to replay the original input against the saved configuration, including stored screenshot requests.
+- Added persistent **Pinned Configurations** and launcher sections for **Pinned**, ranked **Recent**, and remaining configurations.
+- Recent ranking is persisted from actual usage with last-used time and execution count.
+- Added **Duplicate Configuration** with a fresh ID, reset usage metadata, and collision-safe copy naming.
+- Added automatic SQLite schema migration for the new configuration metadata fields.
+
 ## Current Roadmap
 
 The completed phases are located here.
@@ -402,6 +410,7 @@ Phase 12 -> Storage picker, history deletion, backup/restore & request cancellat
 Phase 13 -> Windows startup, provider persistence, scalable dropdowns & secure credentials, Tray click behavior -> Done
 Phase 14 —> Screenshot capture compositor timing fix & DWM cloak -> Done
 Phase 15 -> Markdown Rendering Enhancement -> Done
+Phase 16 -> Launcher configuration productivity -> Done
 ```
 
 The exact next Phase may change; when it does, update the roadmap rather than keeping contradictory plans.
