@@ -370,6 +370,18 @@ Only record durable architectural/product changes here. Do not append repetitive
 - Right-click explicitly opens the existing tray context menu, preserving Toggle, autostart, and Quit actions.
 - Switched the systray dependency to a compatible fork that exposes native click callbacks.
 
+### Phase 14 — Screenshot capture compositor timing fix & DWM cloak
+
+- Hardened the screenshot capture transition by hiding the native eVoca window synchronously before the desktop capture begins.
+- The first implementation relied on HWND visibility plus a compositor delay; this was superseded in Phase 15 because DWM can retain the previous transparent/frameless surface after the window becomes hidden.
+- Fixed desktop screenshot contamination by cloaking the eVoca HWND with `DWMWA_CLOAK` before the native `BitBlt` capture, removing the stale Wails surface from Desktop Window Manager composition rather than relying on timing alone.
+- Flushes DWM while the window is cloaked, captures the desktop, then un-cloaks eVoca before opening the fullscreen screenshot selector.
+- Kept screenshot selection, preview, confirmation, and restore flows unchanged.
+
+### Phase 15 - Markdown Rendering Enhancement
+
+- Improve Markdown rendering with GFM tables, code blocks, syntax highlighting, and LaTeX math support.
+
 ## Current Roadmap
 
 The completed phases are located here.
@@ -389,17 +401,10 @@ Phase 11 -> Full Tailwind utility migration -> Done
 Phase 12 -> Storage picker, history deletion, backup/restore & request cancellation -> Done
 Phase 13 -> Windows startup, provider persistence, scalable dropdowns & secure credentials, Tray click behavior -> Done
 Phase 14 —> Screenshot capture compositor timing fix & DWM cloak -> Done
+Phase 15 -> Markdown Rendering Enhancement -> Done
 ```
 
 The exact next Phase may change; when it does, update the roadmap rather than keeping contradictory plans.
-
-### Phase 14 — Screenshot capture compositor timing fix & DWM cloak
-
-- Hardened the screenshot capture transition by hiding the native eVoca window synchronously before the desktop capture begins.
-- The first implementation relied on HWND visibility plus a compositor delay; this was superseded in Phase 15 because DWM can retain the previous transparent/frameless surface after the window becomes hidden.
-- Fixed desktop screenshot contamination by cloaking the eVoca HWND with `DWMWA_CLOAK` before the native `BitBlt` capture, removing the stale Wails surface from Desktop Window Manager composition rather than relying on timing alone.
-- Flushes DWM while the window is cloaked, captures the desktop, then un-cloaks eVoca before opening the fullscreen screenshot selector.
-- Kept screenshot selection, preview, confirmation, and restore flows unchanged.
 
 ### Phase entry format
 

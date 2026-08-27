@@ -8,17 +8,23 @@
     "build": "tsc && vite build"
   },
   "dependencies": {
+    "katex": "^0.18.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^4.7.0",
-    "typescript": "~5.8.3",
-    "vite": "^7.1.0",
     "tailwindcss": "4.3.3",
-    "@tailwindcss/vite": "4.3.3"
+    "typescript": "~5.8.3",
+    "vite": "^7.1.0"
   }
 }
