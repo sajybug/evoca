@@ -54,12 +54,6 @@ eVoca currently targets **Windows 10/11** and uses WebView2 for the application 
 
 Cross-platform support is not a current project goal.
 
-## Installation
-
-Download the latest Windows release from **GitHub Releases** and run `eVoca.exe`.
-
-For source-based development, see the section below.
-
 ## Development
 
 ### Prerequisites
@@ -68,6 +62,7 @@ For source-based development, see the section below.
 - Go 1.25 or newer.
 - Node.js and npm.
 - WebView2 runtime.
+- Wails v2 CLI.
 
 ### Run the frontend
 
@@ -87,7 +82,7 @@ npm run build
 
 ### Run the Wails application
 
-Install the Wails v2 CLI, then from the repository root run:
+From the repository root:
 
 ```bash
 wails dev
@@ -99,7 +94,9 @@ To create a Windows production build:
 wails build
 ```
 
-The project uses Wails v2 and keeps the frontend and backend responsibilities intentionally separate.
+## Formatting and linting
+
+Go formatting uses the standard `gofmt` tool. Frontend formatting and linting use Prettier.
 
 ## Configuration and providers
 
@@ -122,19 +119,28 @@ Providers are first-class objects. A provider can define its name, type, base UR
 
 Configure providers from **Settings → Providers → Add provider**.
 
+Supported provider types are:
+
+- `openai_compatible`
+- `ollama`
+
 ## Credentials
 
 eVoca does not store raw API keys in ordinary SQLite configuration data.
 
-The current MVP uses environment variables as a temporary credential mechanism. Windows secure credential storage is planned for a future release.
+On Windows, provider API keys are stored through **Windows Credential Manager** when a credential reference is configured. Environment variables can also be used through the provider's configured API-key environment variable.
+
+API keys are not included in settings backups; backups contain provider references and configuration data, not the secret value itself.
 
 Never commit API keys or other secrets to the repository.
 
 ## Data storage
 
-SQLite is used as the local source of truth for application data such as providers, configurations, executions, and settings.
+SQLite is used as the local source of truth for providers, configurations, executions, and application settings.
 
-Data remains local unless a provider request is made explicitly by the user.
+Execution history can contain user input, generated output, system prompts, model/provider information, and captured image data. Data remains local unless a provider request is explicitly made by the user.
+
+Full backups may contain the local SQLite database and history images. Settings-only backups contain configuration/provider data but do not contain API-key values.
 
 ## Architecture
 
@@ -178,19 +184,17 @@ The frontend does not call LLM providers directly. Provider requests are handled
 └── wails.json
 ```
 
-The root-level Go files intentionally remain in the main package because they are part of the Wails application entrypoint and embed application resources directly.
+The root-level Go files intentionally remain in the main package because they are part of the Wails application entrypoint.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the current contribution workflow.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow.
 
 The project intentionally keeps its scope small. Avoid adding agents, MCP, RAG, accounts, cloud sync, marketplace features, or other large subsystems without an explicit product decision.
 
 ## Versioning
 
-eVoca uses semantic versioning for releases.
-
-The current open-source baseline is **`v0.1.0`**.
+eVoca follows semantic versioning. The current baseline is **`v0.1.0`**.
 
 ## About the Name
 

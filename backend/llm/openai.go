@@ -67,11 +67,6 @@ func (p OpenAICompatible) Generate(req Request) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	if apiKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
-	}
-
 	if p.Provider.HeadersJSON != "" && p.Provider.HeadersJSON != "{}" {
 		var headers map[string]string
 		if err := json.Unmarshal([]byte(p.Provider.HeadersJSON), &headers); err != nil {
@@ -80,6 +75,13 @@ func (p OpenAICompatible) Generate(req Request) (string, error) {
 		for k, v := range headers {
 			httpReq.Header.Set(k, v)
 		}
+	}
+
+	// Application-owned headers are applied last so provider configuration
+	// cannot silently replace the credential supplied by the credential store.
+	httpReq.Header.Set("Content-Type", "application/json")
+	if apiKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 
 	resp, err := http.DefaultClient.Do(httpReq)

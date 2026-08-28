@@ -1,0 +1,15 @@
+node_modules
+dist
+build
+coverage
+.next
+out
+.vite
+.cache
+
+*.log
+*.min.*
+*.map
+
+# generated artifacts
+*.snap

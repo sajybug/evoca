@@ -126,16 +126,11 @@ func streamOpenAI(ctx context.Context, provider db.Provider, req Request, onChun
 	if err != nil {
 		return StreamResult{}, err
 	}
-	hreq.Header.Set("Content-Type", "application/json")
-	hreq.Header.Set("Accept", "text/event-stream")
 	apiKey := os.Getenv(envName)
 	if apiKey == "" && store != nil && provider.CredentialRef != "" {
 		if stored, err := store.Get(provider.CredentialRef); err == nil {
 			apiKey = stored
 		}
-	}
-	if apiKey != "" {
-		hreq.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 	if provider.HeadersJSON != "" && provider.HeadersJSON != "{}" {
 		var hs map[string]string
@@ -145,6 +140,14 @@ func streamOpenAI(ctx context.Context, provider db.Provider, req Request, onChun
 		for k, v := range hs {
 			hreq.Header.Set(k, v)
 		}
+	}
+
+	// Application-owned headers are applied last so custom headers cannot
+	// replace the credential used for this request.
+	hreq.Header.Set("Content-Type", "application/json")
+	hreq.Header.Set("Accept", "text/event-stream")
+	if apiKey != "" {
+		hreq.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 	resp, err := http.DefaultClient.Do(hreq)
 	if err != nil {
