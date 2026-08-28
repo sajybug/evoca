@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
-import { EventsEmit, EventsOn } from "../wailsjs/runtime/runtime";
-import { useOverlayStore } from "../stores/overlayStore";
-import { evoca } from "../services/evoca";
-import { Overlay } from "../components/overlay/Overlay";
-import { Settings } from "../components/settings/Settings";
-import { HistoryPanel } from "../components/history/HistoryPanel";
-import type { Configuration, Provider } from "../types/domain";
+import { useEffect, useState } from 'react';
+import { EventsEmit, EventsOn } from '../wailsjs/runtime/runtime';
+import { useOverlayStore } from '../stores/overlayStore';
+import { evoca } from '../services/evoca';
+import { Overlay } from '../components/overlay/Overlay';
+import { Settings } from '../components/settings/Settings';
+import { HistoryPanel } from '../components/history/HistoryPanel';
+import type { Configuration, Provider } from '../types/domain';
 
 export default function App() {
   const [configurations, setConfigurations] = useState<Configuration[]>([]);
@@ -18,38 +18,60 @@ export default function App() {
     evoca.getConfigurations().then(setConfigurations).catch(console.error);
     evoca.getProviders().then(setProviders).catch(console.error);
 
-    const cancel = EventsOn("evoca:overlay", () => {
+    const cancel = EventsOn('evoca:overlay', () => {
       setShowSettings(false);
       setShowHistory(false);
       open();
     });
-    const restored = EventsOn("evoca:data:restored", async () => {
+    const restored = EventsOn('evoca:data:restored', async () => {
       try {
-        const [nextConfigurations, nextProviders] = await Promise.all([evoca.getConfigurations(), evoca.getProviders()]);
+        const [nextConfigurations, nextProviders] = await Promise.all([
+          evoca.getConfigurations(),
+          evoca.getProviders(),
+        ]);
         setConfigurations(nextConfigurations);
         setProviders(nextProviders);
       } catch (error) {
-        console.error("restored data reload failed", error);
+        console.error('restored data reload failed', error);
       }
     });
 
-    return () => { cancel(); restored(); };
+    return () => {
+      cancel();
+      restored();
+    };
   }, [open]);
 
   useEffect(() => {
     const restoreWebViewFocus = () => {
-      window.requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-evoca-root]")?.focus());
+      window.requestAnimationFrame(() =>
+        document.querySelector<HTMLElement>('[data-evoca-root]')?.focus(),
+      );
     };
-    window.addEventListener("focus", restoreWebViewFocus);
+    window.addEventListener('focus', restoreWebViewFocus);
     return () => {
-      window.removeEventListener("focus", restoreWebViewFocus);
+      window.removeEventListener('focus', restoreWebViewFocus);
     };
   }, []);
 
   return (
-    <div data-evoca-root tabIndex={-1} className="h-full w-full outline-none bg-[radial-gradient(circle_at_14%_-5%,rgba(216,184,110,.07),transparent_30%),radial-gradient(circle_at_100%_100%,rgba(96,106,140,.05),transparent_34%),linear-gradient(180deg,#090b0f,#08090c_60%,#07080a)]">
+    <div
+      data-evoca-root
+      tabIndex={-1}
+      className='h-full w-full outline-none bg-[radial-gradient(circle_at_14%_-5%,rgba(216,184,110,.07),transparent_30%),radial-gradient(circle_at_100%_100%,rgba(96,106,140,.05),transparent_34%),linear-gradient(180deg,#090b0f,#08090c_60%,#07080a)]'
+    >
       {showHistory ? (
-        <HistoryPanel configurations={configurations} onClose={() => setShowHistory(false)} onRunAgain={(execution) => { setShowHistory(false); window.setTimeout(() => EventsEmit("evoca:run-again", { executionId: execution.id }), 50); }} />
+        <HistoryPanel
+          configurations={configurations}
+          onClose={() => setShowHistory(false)}
+          onRunAgain={(execution) => {
+            setShowHistory(false);
+            window.setTimeout(
+              () => EventsEmit('evoca:run-again', { executionId: execution.id }),
+              50,
+            );
+          }}
+        />
       ) : showSettings ? (
         <Settings
           configurations={configurations}

@@ -43,9 +43,16 @@ import {
   StartScreenshotStream,
   ListExecutions,
   GetExecution,
-} from "../wailsjs/go/main/App";
+} from '../wailsjs/go/main/App';
 
-import type { Configuration, Provider, ProviderModel, Execution, ExecutionPage, StorageSettings } from "../types/domain";
+import type {
+  Configuration,
+  Provider,
+  ProviderModel,
+  Execution,
+  ExecutionPage,
+  StorageSettings,
+} from '../types/domain';
 
 export const evoca = {
   getConfigurations(): Promise<Configuration[]> {
@@ -92,7 +99,12 @@ export const evoca = {
     return StartConfigurationStream(id, input, requestId);
   },
 
-  startConfigurationStreamWithModel(id: string, input: string, requestId: string, model: string): Promise<void> {
+  startConfigurationStreamWithModel(
+    id: string,
+    input: string,
+    requestId: string,
+    model: string,
+  ): Promise<void> {
     return StartConfigurationStreamWithModel(id, input, requestId, model);
   },
 
@@ -124,7 +136,7 @@ export const evoca = {
     return ChooseBackupFile(current);
   },
 
-  createBackup(path: string, mode: "full" | "settings"): Promise<void> {
+  createBackup(path: string, mode: 'full' | 'settings'): Promise<void> {
     return CreateBackup(path, mode);
   },
 
@@ -148,7 +160,14 @@ export const evoca = {
     return BeginScreenshot();
   },
 
-  previewScreenshot(x: number, y: number, width: number, height: number, viewportWidth: number, viewportHeight: number): Promise<string> {
+  previewScreenshot(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    viewportWidth: number,
+    viewportHeight: number,
+  ): Promise<string> {
     return PreviewScreenshot(x, y, width, height, viewportWidth, viewportHeight);
   },
 
@@ -156,11 +175,38 @@ export const evoca = {
     return CancelScreenshot();
   },
 
-  startScreenshotStream(id: string, input: string, requestId: string, x: number, y: number, width: number, height: number, viewportWidth: number, viewportHeight: number): Promise<void> {
-    return StartScreenshotStream(id, input, requestId, x, y, width, height, viewportWidth, viewportHeight);
+  startScreenshotStream(
+    id: string,
+    input: string,
+    requestId: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    viewportWidth: number,
+    viewportHeight: number,
+  ): Promise<void> {
+    return StartScreenshotStream(
+      id,
+      input,
+      requestId,
+      x,
+      y,
+      width,
+      height,
+      viewportWidth,
+      viewportHeight,
+    );
   },
 
-  listExecutions(page: number, pageSize: number, search: string, status: string, requestType: string, configurationId: string): Promise<ExecutionPage> {
+  listExecutions(
+    page: number,
+    pageSize: number,
+    search: string,
+    status: string,
+    requestType: string,
+    configurationId: string,
+  ): Promise<ExecutionPage> {
     return ListExecutions(page, pageSize, search, status, requestType, configurationId);
   },
 
@@ -180,11 +226,21 @@ export const evoca = {
     return CancelLLM(requestId);
   },
 
-  isAutostartEnabled(): Promise<boolean> { return IsAutostartEnabled(); },
-  setAutostart(enabled: boolean): Promise<void> { return SetAutostart(enabled); },
-  hasProviderCredential(ref: string): Promise<boolean> { return HasProviderCredential(ref); },
-  setProviderCredential(ref: string, value: string): Promise<void> { return SetProviderCredential(ref, value); },
-  deleteProviderCredential(ref: string): Promise<void> { return DeleteProviderCredential(ref); },
+  isAutostartEnabled(): Promise<boolean> {
+    return IsAutostartEnabled();
+  },
+  setAutostart(enabled: boolean): Promise<void> {
+    return SetAutostart(enabled);
+  },
+  hasProviderCredential(ref: string): Promise<boolean> {
+    return HasProviderCredential(ref);
+  },
+  setProviderCredential(ref: string, value: string): Promise<void> {
+    return SetProviderCredential(ref, value);
+  },
+  deleteProviderCredential(ref: string): Promise<void> {
+    return DeleteProviderCredential(ref);
+  },
 
   quit(): Promise<void> {
     return Quit();
