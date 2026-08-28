@@ -35,6 +35,13 @@ func Open(ctx context.Context) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	// SQLite is a single-file database. Keep one pooled connection and give
+	// short-lived concurrent operations a small window to yield on locks.
+	conn.SetMaxOpenConns(1)
+	if _, err := conn.Exec(`PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;`); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
 
 	d := &DB{conn: conn, imageDir: settings.ImagesPath}
 	if err := d.initializeSchema(); err != nil {
@@ -163,59 +170,89 @@ func (d *DB) initializeSchema() error {
 		return err
 	}
 
-	// Seed defaults exactly once. The previous implementation used INSERT OR IGNORE on every startup,
-	// which caused user-deleted default providers/models to come back on the next launch.
-	seeded, err := d.GetSetting("default_seeded", "")
+	// Seed defaults through a versioned initializer. Existing installations get the
+	// new default configurations once, while later startups leave user edits alone.
+	seedVersion, err := d.GetSetting("default_seed_version", "")
 	if err != nil {
 		return err
 	}
-	if seeded == "1" {
+	if seedVersion == "3" {
 		return nil
 	}
 
-	var providerCount int
-	if err := d.conn.QueryRow(`SELECT COUNT(1) FROM providers`).Scan(&providerCount); err != nil {
-		return err
-	}
-	if providerCount > 0 {
-		// Existing installations were already initialized before this marker existed.
-		// Do not re-add defaults; only mark the database as initialized.
-		return d.SaveSetting("default_seeded", "1")
+	now := time.Now().Unix()
+
+	if seedVersion == "" {
+		var providerCount int
+		if err := d.conn.QueryRow(`SELECT COUNT(1) FROM providers`).Scan(&providerCount); err != nil {
+			return err
+		}
+		if providerCount == 0 {
+			if _, err := d.conn.Exec(`
+				INSERT INTO providers
+				  (id,name,kind,base_url,credential_ref,api_key_env,headers_json,created_at)
+				VALUES
+				  ('openai','OpenAI','openai_compatible','https://api.openai.com/v1',
+				   'openai_api_key','EVOCA_OPENAI_API_KEY','{}',?),
+				  ('ollama','Ollama','ollama','http://localhost:11434',
+				   '','','{}',?)
+			`, now, now); err != nil {
+				return err
+			}
+		}
+		if _, err := d.conn.Exec(`
+			INSERT OR IGNORE INTO provider_models(id,provider_id,name,display_name,created_at)
+			VALUES
+			  ('openai-gpt-5','openai','gpt-5','GPT-5',?),
+			  ('openai-gpt-5-mini','openai','gpt-5-mini','GPT-5 Mini',?),
+			  ('ollama-llama3','ollama','llama3','Llama 3',?)
+		`, now, now, now); err != nil {
+			return err
+		}
 	}
 
-	now := time.Now().Unix()
+	// Phase 18 adds multiple useful starter configurations. INSERT OR IGNORE keeps
+	// existing user-edited configurations intact while adding only missing defaults.
 	if _, err := d.conn.Exec(`
-		INSERT INTO providers
-		  (id,name,kind,base_url,credential_ref,api_key_env,headers_json,created_at)
-		VALUES
-		  ('openai','OpenAI','openai_compatible','https://api.openai.com/v1',
-		   'openai_api_key','EVOCA_OPENAI_API_KEY','{}',?),
-		  ('ollama','Ollama','ollama','http://localhost:11434',
-		   '','','{}',?)
-	`, now, now); err != nil {
-		return err
-	}
-	if _, err := d.conn.Exec(`
-		INSERT INTO provider_models (id,provider_id,name,display_name,created_at)
-		VALUES
-		  ('openai-gpt-5','openai','gpt-5','GPT-5',?),
-		  ('openai-gpt-5-mini','openai','gpt-5-mini','GPT-5 Mini',?),
-		  ('ollama-llama3','ollama','llama3','Llama 3',?)
-	`, now, now, now); err != nil {
-		return err
-	}
-	if _, err := d.conn.Exec(`
-		INSERT INTO configurations
+		INSERT OR IGNORE INTO configurations
 		  (id,name,description,icon,provider_id,model,spell,input_type,output_type,
 		   temperature,max_tokens,created_at,updated_at)
 		VALUES
 		  ('translate','Translate','Translate text to Persian','✦','openai','gpt-5',
-		   'Translate the user input accurately into Persian. Preserve formatting.',
-		   'text','text',0.2,2000,?,?)
+		   'Translate the user input accurately into Persian. Preserve formatting and meaning.',
+		   'text','text',0.2,2000,?,?),
+		  ('summarize','Summarize','Summarize the input clearly and concisely','◆','openai','gpt-5-mini',
+		   'Summarize the user input clearly. Keep the key facts and important context. Use concise language.',
+		   'text','text',0.2,1200,?,?),
+		  ('improve-writing','Improve Writing','Improve clarity, grammar, and style','◆','openai','gpt-5-mini',
+		   'Improve the writing for clarity, grammar, flow, and tone while preserving the original meaning. Return only the improved text.',
+		   'text','text',0.3,2000,?,?)
+	`, now, now, now, now, now, now); err != nil {
+		return err
+	}
+
+	// Repair the Phase 18 seed dependency graph on existing installations.
+	// Earlier versions skipped provider seeding whenever any provider already existed,
+	// which could leave the starter configurations pointing at a missing provider/model.
+	if _, err := d.conn.Exec(`
+		INSERT OR IGNORE INTO providers
+		  (id,name,kind,base_url,credential_ref,api_key_env,headers_json,created_at)
+		VALUES
+		  ('openai','OpenAI','openai_compatible','https://api.openai.com/v1',
+		   'openai_api_key','EVOCA_OPENAI_API_KEY','{}',?)
+	`, now); err != nil {
+		return err
+	}
+	if _, err := d.conn.Exec(`
+		INSERT OR IGNORE INTO provider_models(id,provider_id,name,display_name,created_at)
+		VALUES
+		  ('openai-gpt-5','openai','gpt-5','GPT-5',?),
+		  ('openai-gpt-5-mini','openai','gpt-5-mini','GPT-5 Mini',?)
 	`, now, now); err != nil {
 		return err
 	}
-	return d.SaveSetting("default_seeded", "1")
+
+	return d.SaveSetting("default_seed_version", "3")
 }
 
 func (d *DB) ensureColumn(table, column, definition string) error {

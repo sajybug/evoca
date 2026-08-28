@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -24,6 +26,7 @@ type App struct {
 	hotkey          *hotkey.Manager
 	overlayVisible  bool
 	streamMu        sync.Mutex
+	streamWG        sync.WaitGroup
 	streams         map[string]context.CancelFunc
 	screenshotMu    sync.Mutex
 	screenshotPNG   []byte
@@ -58,6 +61,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.hotkey = manager
 	a.startTray()
+	startWindowFocusWatcher()
 }
 
 func (a *App) domReady(ctx context.Context) {
@@ -71,6 +75,7 @@ func (a *App) shutdown(ctx context.Context) {
 	}
 	a.streams = make(map[string]context.CancelFunc)
 	a.streamMu.Unlock()
+	stopWindowFocusWatcher()
 	a.stopTray()
 	if a.hotkey != nil {
 		_ = a.hotkey.Stop()
@@ -255,9 +260,21 @@ func (a *App) ChooseBackupSavePath(current string) (string, error) {
 	if a.ctx == nil {
 		return "", fmt.Errorf("app is not initialized")
 	}
+	// Native file dialogs temporarily own activation/focus. Suspend the eVoca
+	// focus recovery watcher so it cannot steal the dialog back to the main window.
+	releaseFocusRecovery := suppressWindowFocusRecovery()
+	defer releaseFocusRecovery()
+
+	defaultFilename := "eVoca-backup-" + time.Now().Format("2006-01-02_15-04-05") + ".zip"
+	if strings.TrimSpace(current) != "" {
+		base := filepath.Base(current)
+		if strings.TrimSpace(base) != "" && base != "." && base != string(filepath.Separator) {
+			defaultFilename = base
+		}
+	}
 	return runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
 		DefaultDirectory: filepath.Dir(current),
-		DefaultFilename:  "eVoca-backup.zip",
+		DefaultFilename:  defaultFilename,
 		Title:            "Save eVoca backup",
 		Filters:          []runtime.FileFilter{{DisplayName: "eVoca backup (*.zip)", Pattern: "*.zip"}},
 	})
@@ -267,6 +284,8 @@ func (a *App) ChooseBackupFile(current string) (string, error) {
 	if a.ctx == nil {
 		return "", fmt.Errorf("app is not initialized")
 	}
+	releaseFocusRecovery := suppressWindowFocusRecovery()
+	defer releaseFocusRecovery()
 	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		DefaultDirectory: filepath.Dir(current),
 		Title:            "Restore eVoca backup",
@@ -274,11 +293,14 @@ func (a *App) ChooseBackupFile(current string) (string, error) {
 	})
 }
 
-func (a *App) CreateBackup(path string) error {
+func (a *App) CreateBackup(path, mode string) error {
 	if a.database == nil {
 		return fmt.Errorf("database is not initialized")
 	}
-	return a.database.BackupTo(path)
+	if strings.TrimSpace(path) == "" {
+		return fmt.Errorf("backup path is required")
+	}
+	return a.database.BackupTo(path, db.BackupMode(mode))
 }
 
 func (a *App) RestoreBackup(path string) error {
@@ -288,24 +310,75 @@ func (a *App) RestoreBackup(path string) error {
 	if strings.TrimSpace(path) == "" {
 		return fmt.Errorf("backup path is required")
 	}
-	if err := a.database.Close(); err != nil {
-		return err
-	}
-	if err := db.RestoreFromBackup(path); err != nil {
-		// The active handle is closed at this point; always reopen the current database
-		// so a failed restore does not leave the running app without a usable DB.
-		if reopened, reopenErr := db.Open(a.ctx); reopenErr == nil {
-			a.database = reopened
-		}
-		return err
-	}
-	database, err := db.Open(a.ctx)
+
+	mode, err := db.ReadBackupMode(path)
 	if err != nil {
 		return err
 	}
-	a.database = database
-	runtime.EventsEmit(a.ctx, "evoca:data:restored", map[string]any{"timestamp": time.Now().UnixMilli()})
+
+	// Restore is an exclusive database maintenance operation. Cancel any active
+	// LLM streams and wait for them to finish before closing SQLite.
+	if !a.cancelActiveStreamsAndWait(5 * time.Second) {
+		return fmt.Errorf("could not stop active operations before restore")
+	}
+
+	currentDB := a.database
+	a.database = nil
+	if err := currentDB.Close(); err != nil {
+		a.database = currentDB
+		return fmt.Errorf("close database before restore: %w", err)
+	}
+
+	var restoreErr error
+	if mode == db.BackupModeFull {
+		restoreErr = db.RestoreFullFromBackup(path)
+	} else {
+		restoreErr = db.RestoreSettingsFromBackup(path)
+	}
+
+	if restoreErr != nil {
+		reopened, reopenErr := db.Open(a.ctx)
+		if reopenErr != nil {
+			return fmt.Errorf("restore failed: %v; reopen database failed: %w", restoreErr, reopenErr)
+		}
+		a.database = reopened
+		return restoreErr
+	}
+
+	runtime.EventsEmit(a.ctx, "evoca:data:restored", map[string]any{"timestamp": time.Now().UnixMilli(), "mode": string(mode)})
 	return nil
+}
+
+func (a *App) cancelActiveStreamsAndWait(timeout time.Duration) bool {
+	a.streamMu.Lock()
+	cancels := make([]context.CancelFunc, 0, len(a.streams))
+	for _, cancel := range a.streams {
+		cancels = append(cancels, cancel)
+	}
+	a.streamMu.Unlock()
+
+	for _, cancel := range cancels {
+		cancel()
+	}
+	if len(cancels) == 0 {
+		return true
+	}
+
+	done := make(chan struct{})
+	go func() {
+		a.streamWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return true
+	case <-time.After(timeout):
+		return false
+	}
+}
+
+func (a *App) RecoverWindowFocus() {
+	recoverWindowFocus()
 }
 
 func (a *App) DeleteExecution(id string) error {
@@ -326,6 +399,33 @@ func (a *App) Quit() {
 	if a.ctx != nil {
 		runtime.Quit(a.ctx)
 	}
+}
+
+func (a *App) Restart() {
+	if a.ctx == nil {
+		return
+	}
+
+	exe, err := os.Executable()
+	if err != nil {
+		runtime.LogError(a.ctx, "restart failed: "+err.Error())
+		return
+	}
+	args := append([]string(nil), os.Args[1:]...)
+	go func(ctx context.Context) {
+		// Let Wails run its normal shutdown path before the replacement process starts.
+		time.Sleep(700 * time.Millisecond)
+		cmd := exec.Command(exe, args...)
+		cmd.Dir = filepath.Dir(exe)
+		cmd.Stdout = nil
+		cmd.Stderr = nil
+		cmd.Stdin = nil
+		if err := cmd.Start(); err != nil {
+			runtime.LogError(ctx, "restart launch failed: "+err.Error())
+			return
+		}
+		runtime.Quit(ctx)
+	}(a.ctx)
 }
 
 func (a *App) GetConfigurations() ([]db.Configuration, error) {
@@ -507,6 +607,7 @@ func (a *App) registerStream(requestID string) (context.Context, context.CancelF
 	ctx, cancel := context.WithCancel(a.ctx)
 	a.streamMu.Lock()
 	a.streams[requestID] = cancel
+	a.streamWG.Add(1)
 	a.streamMu.Unlock()
 	return ctx, cancel
 }
@@ -515,6 +616,7 @@ func (a *App) unregisterStream(requestID string) {
 	a.streamMu.Lock()
 	delete(a.streams, requestID)
 	a.streamMu.Unlock()
+	a.streamWG.Done()
 }
 
 func (a *App) CancelLLM(requestID string) error {

@@ -41,7 +41,9 @@ export default function App() {
       window.requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-evoca-root]")?.focus());
     };
     window.addEventListener("focus", restoreWebViewFocus);
-    return () => window.removeEventListener("focus", restoreWebViewFocus);
+    return () => {
+      window.removeEventListener("focus", restoreWebViewFocus);
+    };
   }, []);
 
   return (

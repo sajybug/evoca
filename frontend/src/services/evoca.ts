@@ -7,6 +7,7 @@ import {
   StartExecutionStream,
   HideOverlay,
   Quit,
+  Restart,
   SaveConfiguration,
   DeleteConfiguration,
   SetConfigurationPinned,
@@ -24,6 +25,7 @@ import {
   ChooseBackupSavePath,
   ChooseBackupFile,
   CreateBackup,
+  RecoverWindowFocus,
   RestoreBackup,
   DeleteExecution,
   ClearExecutions,
@@ -122,8 +124,12 @@ export const evoca = {
     return ChooseBackupFile(current);
   },
 
-  createBackup(path: string): Promise<void> {
-    return CreateBackup(path);
+  createBackup(path: string, mode: "full" | "settings"): Promise<void> {
+    return CreateBackup(path, mode);
+  },
+
+  recoverWindowFocus(): Promise<void> {
+    return RecoverWindowFocus();
   },
 
   restoreBackup(path: string): Promise<void> {
@@ -182,6 +188,10 @@ export const evoca = {
 
   quit(): Promise<void> {
     return Quit();
+  },
+
+  restart(): Promise<void> {
+    return Restart();
   },
 
   saveConfiguration(configuration: Configuration): Promise<void> {

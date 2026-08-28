@@ -398,6 +398,22 @@ Only record durable architectural/product changes here. Do not append repetitive
 - Added WebView focus recovery when the overlay is shown or the app window regains focus to mitigate the first-click-after-deactivation issue.
 - Extended the configuration streaming backend to accept a per-request Model override; no database migration is required.
 
+### Phase 18 — Scoped backup/restore, richer defaults & native focus recovery
+
+- Added two Backup/Restore scopes: Full program (database + History images + local settings/data) and Settings only (Providers, Provider Models, and Configurations). Machine secrets/API keys are never copied.
+- Added multiple default Configurations (Translate, Summarize, Improve Writing) with versioned seeding so existing installations receive the new defaults once without overwriting user edits.
+- Reworked Windows focus recovery to monitor the native cursor/window relationship while eVoca is visible, restoring native foreground focus when the pointer returns from another application so the first click is not consumed by activation; native file dialogs are not targeted because the cursor is no longer over the eVoca window.
+- Backup save dialogs now default to timestamped filenames in the form `eVoca-backup-YYYY-MM-DD_HH-MM-SS.zip`.
+- Native Backup Save/Open dialogs temporarily suppress the Windows focus-recovery watcher. This prevents the watcher from calling `SetForegroundWindow`/`SetActiveWindow` while a native file dialog owns activation, which can destabilize Wails/WebView2 and cause the app to exit around backup operations. The focus watcher remains active for normal app interaction after the dialog closes.
+- Restoring either backup type completes the data operation first, closes the restore confirmation modal, then restarts the application so all restored state is reloaded cleanly.
+- Full and settings restore are exclusive maintenance operations.
+- Active LLM streams are cancelled and allowed to finish before the application DB connection is closed.
+- Settings restore is performed against a separate maintenance SQLite connection while the normal app connection is closed.
+- The normal SQLite pool uses one open connection with a short busy timeout to reduce transient lock contention.
+- Settings restore validates providers/models/configuration references before modifying live data.
+- Settings restore transactions always rollback on any failure until commit succeeds.
+- Settings backups reject orphaned configurations so invalid restore payloads are not produced.
+
 ## Current Roadmap
 
 The completed phases are located here.
@@ -420,6 +436,7 @@ Phase 14 —> Screenshot capture compositor timing fix & DWM cloak -> Done
 Phase 15 -> Markdown Rendering Enhancement -> Done
 Phase 16 -> Launcher configuration productivity -> Done
 Phase 17 -> Configuration views, chat model override & focus recovery -> Done
+Phase 18 -> Scoped backup/restore, richer defaults & native focus recovery -> Done
 ```
 
 The exact next Phase may change; when it does, update the roadmap rather than keeping contradictory plans.

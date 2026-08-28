@@ -503,11 +503,24 @@ export function Settings({ configurations, onChange, onClose }: Props) {
         ) : section === "backup" ? (
           <div className="h-full min-h-0 overflow-y-auto pr-1">
             <div className="rounded-[16px] border border-white/[.06] bg-white/[.018] p-4">
-              <div className="mb-4 flex items-start justify-between gap-3"><div><h3 className={settingsHeadingClass}>Backup & Restore</h3><p className="mt-1.5 text-[9px] leading-4 text-white/28">Protect local configurations, providers, execution history, and saved chat images.</p></div><span className={settingsBadgeClass}>LOCAL</span></div>
+              <div className="mb-4 flex items-start justify-between gap-3"><div><h3 className={settingsHeadingClass}>Backup & Restore</h3><p className="mt-1.5 text-[9px] leading-4 text-white/28">Choose between a complete local backup or settings only.</p></div><span className={settingsBadgeClass}>LOCAL</span></div>
               <div className="space-y-3">
-                <div className="rounded-[14px] border border-white/[.06] bg-white/[.018] p-4"><div className="flex items-start justify-between gap-4"><div><div className={settingsSectionMetaClass}>Create backup</div><p className={settingsBodyClass}>A single ZIP contains your SQLite data and the images used by History. API keys are not copied from environment variables.</p></div><button type="button" className="shrink-0 inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white disabled:opacity-40 !border-evoca-accent/35 !bg-evoca-accent !text-[#18170f]" disabled={backupBusy} onClick={async () => { setBackupBusy(true); try { const target = await evoca.chooseBackupSavePath(""); if (target) { await evoca.createBackup(target); setMessage("Backup created successfully."); } } catch (error) { setMessage(`Backup failed: ${String(error)}`); } finally { setBackupBusy(false); } }}>{backupBusy ? "Working…" : "Create backup"}</button></div></div>
-                <div className="rounded-[14px] border border-white/[.06] bg-white/[.018] p-4"><div className="flex items-start justify-between gap-4"><div><div className={settingsSectionMetaClass}>Restore backup</div><p className={settingsBodyClass}>Restoring replaces the current local database and History images with the selected backup.</p></div><button type="button" className="shrink-0 inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white disabled:opacity-40 !border-red-200/10 !bg-red-300/[.055] !text-evoca-danger" disabled={backupBusy} onClick={() => setConfirm({ kind: "restore" })}>Restore backup</button></div></div>
-                <div className="rounded-[12px] border border-amber-200/[.08] bg-amber-200/[.025] px-3 py-2.5 text-[9px] leading-5 text-white/35">Restoring does not restore operating-system environment variables or other machine secrets.</div>
+                <div className="rounded-[14px] border border-white/[.06] bg-white/[.018] p-4">
+                  <div className={settingsSectionMetaClass}>Create backup</div>
+                  <p className={settingsBodyClass}>Choose what to include. API keys are never copied from Windows Credential Manager or environment variables.</p>
+                  <div className="mt-3 grid grid-cols-2 gap-3 max-[760px]:grid-cols-1">
+                    <button type="button" className="rounded-[12px] border border-white/[.075] bg-white/[.025] p-3 text-left transition hover:border-evoca-accent/30 hover:bg-white/[.05] disabled:opacity-40" disabled={backupBusy} onClick={async () => { setBackupBusy(true); try { const target = await evoca.chooseBackupSavePath(""); if (target) { await evoca.createBackup(target, "full"); setMessage("Full backup created successfully."); } } catch (error) { setMessage(`Full backup failed: ${String(error)}`); } finally { setBackupBusy(false); } }}>
+                      <div className="text-[10px] font-semibold text-white/80">Full program</div>
+                      <div className="mt-1 text-[9px] leading-4 text-white/30">Database, History images, providers, configurations, and local settings.</div>
+                    </button>
+                    <button type="button" className="rounded-[12px] border border-evoca-accent/25 bg-evoca-accent/[.05] p-3 text-left transition hover:border-evoca-accent/40 hover:bg-evoca-accent/[.08] disabled:opacity-40" disabled={backupBusy} onClick={async () => { setBackupBusy(true); try { const target = await evoca.chooseBackupSavePath(""); if (target) { await evoca.createBackup(target, "settings"); setMessage("Settings backup created successfully."); } } catch (error) { setMessage(`Settings backup failed: ${String(error)}`); } finally { setBackupBusy(false); } }}>
+                      <div className="text-[10px] font-semibold text-evoca-accent">Settings only</div>
+                      <div className="mt-1 text-[9px] leading-4 text-white/30">Providers, models, and configurations only. History stays untouched.</div>
+                    </button>
+                  </div>
+                </div>
+                <div className="rounded-[14px] border border-white/[.06] bg-white/[.018] p-4"><div className="flex items-start justify-between gap-4"><div><div className={settingsSectionMetaClass}>Restore backup</div><p className={settingsBodyClass}>eVoca detects the backup type automatically. Full backups replace local database data and History images; settings backups replace only providers, models, and configurations.</p></div><button type="button" className="shrink-0 inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-white/[.075] bg-white/[.045] px-3 py-2 text-[10px] font-semibold text-white/82 transition hover:border-white/[.12] hover:bg-white/[.08] hover:text-white disabled:opacity-40 !border-red-200/10 !bg-red-300/[.055] !text-evoca-danger" disabled={backupBusy} onClick={() => setConfirm({ kind: "restore" })}>Restore backup</button></div></div>
+                <div className="rounded-[12px] border border-amber-200/[.08] bg-amber-200/[.025] px-3 py-2.5 text-[9px] leading-5 text-white/35">Full backups restore the database and History images but never restore machine secrets. Settings-only restore leaves History, images, and app-level settings untouched.</div>
               </div>
             </div>
           </div>
@@ -571,7 +584,7 @@ export function Settings({ configurations, onChange, onClose }: Props) {
     <ConfirmModal
       open={confirm !== null}
       title={confirm?.kind === "restore" ? "Restore backup?" : "Delete item?"}
-      message={confirm?.kind === "restore" ? "Current local configurations and History will be replaced." : "This action cannot be undone."}
+      message={confirm?.kind === "restore" ? "eVoca will detect the backup type. A full backup replaces local database data and History images; a settings backup replaces providers, models, and configurations." : "This action cannot be undone."}
       confirmLabel={confirm?.kind === "restore" ? "Restore" : "Delete"}
       busy={backupBusy || saving}
       onCancel={() => setConfirm(null)}
@@ -580,7 +593,17 @@ export function Settings({ configurations, onChange, onClose }: Props) {
         if (!action) return;
         if (action.kind === "restore") {
           setBackupBusy(true);
-          try { const target = await evoca.chooseBackupFile(""); if (target) { await evoca.restoreBackup(target); onChange(await evoca.getConfigurations()); setMessage("Backup restored successfully."); } setConfirm(null); }
+          try {
+            const target = await evoca.chooseBackupFile("");
+            if (target) {
+              await evoca.restoreBackup(target);
+              setConfirm(null);
+              setMessage("Backup restored. Restarting eVoca…");
+              window.setTimeout(() => { void evoca.restart(); }, 120);
+            } else {
+              setConfirm(null);
+            }
+          }
           catch (error) { setMessage(`Restore failed: ${String(error)}`); }
           finally { setBackupBusy(false); }
           return;

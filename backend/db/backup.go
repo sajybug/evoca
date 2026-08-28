@@ -2,6 +2,7 @@ package db
 
 import (
 	"archive/zip"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,28 +12,34 @@ import (
 	"time"
 )
 
+type BackupMode string
+
+const (
+	BackupModeFull     BackupMode = "full"
+	BackupModeSettings BackupMode = "settings"
+)
+
 type BackupMetadata struct {
-	Version   int    `json:"version"`
-	CreatedAt int64  `json:"createdAt"`
-	Database  string `json:"database"`
-	Images    string `json:"images"`
+	Version   int        `json:"version"`
+	CreatedAt int64      `json:"createdAt"`
+	Mode      BackupMode `json:"mode,omitempty"`
+	Database  string     `json:"database,omitempty"`
+	Images    string     `json:"images,omitempty"`
+	Data      string     `json:"data,omitempty"`
 }
 
-func (d *DB) BackupTo(path string) error {
-	settings, err := LoadStorageSettings()
-	if err != nil {
-		return err
+type BackupPayload struct {
+	Providers      []Provider      `json:"providers"`
+	Models         []ProviderModel `json:"models"`
+	Configurations []Configuration `json:"configurations"`
+}
+
+func (d *DB) BackupTo(path string, mode BackupMode) error {
+	if mode != BackupModeFull && mode != BackupModeSettings {
+		return fmt.Errorf("unsupported backup mode %q", mode)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
-	}
-	if _, err := os.Stat(settings.DatabasePath); err != nil {
-		return fmt.Errorf("database file is unavailable: %w", err)
-	}
-
-	// Ensure WAL content is checkpointed into the main database file before copying it.
-	if _, err := d.conn.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
-		return fmt.Errorf("checkpoint database: %w", err)
 	}
 
 	tmp := path + ".tmp"
@@ -42,59 +49,238 @@ func (d *DB) BackupTo(path string) error {
 		return err
 	}
 	zw := zip.NewWriter(out)
-
-	metadata, _ := json.MarshalIndent(BackupMetadata{Version: 1, CreatedAt: time.Now().UnixMilli(), Database: "evoca.db", Images: "images/"}, "", "  ")
-	if err := writeZipBytes(zw, "metadata.json", metadata); err != nil {
-		out.Close()
-		return err
-	}
-	if err := addFileToZip(zw, settings.DatabasePath, "database/evoca.db"); err != nil {
-		out.Close()
-		return err
+	cleanup := func() {
+		_ = zw.Close()
+		_ = out.Close()
+		_ = os.Remove(tmp)
 	}
 
-	if _, err := os.Stat(settings.ImagesPath); err == nil {
-		err = filepath.Walk(settings.ImagesPath, func(filePath string, info os.FileInfo, walkErr error) error {
-			if walkErr != nil {
-				return walkErr
-			}
-			if info.IsDir() {
-				return nil
-			}
-			rel, err := filepath.Rel(settings.ImagesPath, filePath)
+	metadata := BackupMetadata{Version: 3, CreatedAt: time.Now().UnixMilli(), Mode: mode}
+	if mode == BackupModeFull {
+		metadata.Database = "database/evoca.db"
+		metadata.Images = "images/"
+	} else {
+		metadata.Data = "data/backup.json"
+	}
+	metadataBytes, err := json.MarshalIndent(metadata, "", "  ")
+	if err != nil {
+		cleanup()
+		return fmt.Errorf("encode backup metadata: %w", err)
+	}
+	if err := writeZipBytes(zw, "metadata.json", metadataBytes); err != nil {
+		cleanup()
+		return err
+	}
+
+	if mode == BackupModeSettings {
+		payload, err := d.settingsBackupPayload()
+		if err != nil {
+			cleanup()
+			return err
+		}
+		payloadBytes, err := json.MarshalIndent(payload, "", "  ")
+		if err != nil {
+			cleanup()
+			return fmt.Errorf("encode backup data: %w", err)
+		}
+		if err := writeZipBytes(zw, "data/backup.json", payloadBytes); err != nil {
+			cleanup()
+			return err
+		}
+	} else {
+		settings, err := LoadStorageSettings()
+		if err != nil {
+			cleanup()
+			return err
+		}
+		if _, err := os.Stat(settings.DatabasePath); err != nil {
+			cleanup()
+			return fmt.Errorf("database file is unavailable: %w", err)
+		}
+
+		// Make sure committed WAL pages are in the main database file before copying it.
+		if _, err := d.conn.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+			cleanup()
+			return fmt.Errorf("checkpoint database: %w", err)
+		}
+		if err := addFileToZip(zw, settings.DatabasePath, "database/evoca.db"); err != nil {
+			cleanup()
+			return err
+		}
+
+		if info, err := os.Stat(settings.ImagesPath); err == nil && info.IsDir() {
+			err = filepath.Walk(settings.ImagesPath, func(filePath string, info os.FileInfo, walkErr error) error {
+				if walkErr != nil {
+					return walkErr
+				}
+				if info.IsDir() {
+					return nil
+				}
+				rel, err := filepath.Rel(settings.ImagesPath, filePath)
+				if err != nil {
+					return err
+				}
+				return addFileToZip(zw, filePath, filepath.ToSlash(filepath.Join("images", rel)))
+			})
 			if err != nil {
+				cleanup()
 				return err
 			}
-			return addFileToZip(zw, filePath, filepath.ToSlash(filepath.Join("images", rel)))
-		})
-		if err != nil {
-			out.Close()
+		} else if err != nil && !os.IsNotExist(err) {
+			cleanup()
 			return err
 		}
 	}
+
 	if err := zw.Close(); err != nil {
-		out.Close()
+		_ = out.Close()
+		_ = os.Remove(tmp)
 		return err
 	}
 	if err := out.Close(); err != nil {
+		_ = os.Remove(tmp)
 		return err
 	}
-	return os.Rename(tmp, path)
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
-func RestoreFromBackup(path string) error {
+func (d *DB) settingsBackupPayload() (BackupPayload, error) {
+	providers, err := d.ListProviders()
+	if err != nil {
+		return BackupPayload{}, fmt.Errorf("load providers: %w", err)
+	}
+	configurations, err := d.ListConfigurations()
+	if err != nil {
+		return BackupPayload{}, fmt.Errorf("load configurations: %w", err)
+	}
+
+	models := make([]ProviderModel, 0)
+	providerIDs := make(map[string]struct{}, len(providers))
+	for _, provider := range providers {
+		providerIDs[provider.ID] = struct{}{}
+		providerModels, err := d.ListProviderModels(provider.ID)
+		if err != nil {
+			return BackupPayload{}, fmt.Errorf("load models for provider %q: %w", provider.ID, err)
+		}
+		models = append(models, providerModels...)
+	}
+
+	modelsByProvider := make(map[string]map[string]struct{})
+	for _, model := range models {
+		if modelsByProvider[model.ProviderID] == nil {
+			modelsByProvider[model.ProviderID] = make(map[string]struct{})
+		}
+		modelsByProvider[model.ProviderID][model.Name] = struct{}{}
+	}
+	for _, config := range configurations {
+		if _, ok := providerIDs[config.ProviderID]; !ok {
+			return BackupPayload{}, fmt.Errorf("cannot create settings backup: configuration %q references missing provider %q", config.ID, config.ProviderID)
+		}
+		if _, ok := modelsByProvider[config.ProviderID][config.Model]; !ok {
+			return BackupPayload{}, fmt.Errorf("cannot create settings backup: configuration %q references missing model %q for provider %q", config.ID, config.Model, config.ProviderID)
+		}
+	}
+
+	return BackupPayload{Providers: providers, Models: models, Configurations: configurations}, nil
+}
+
+func ReadBackupMode(path string) (BackupMode, error) {
+	metadata, err := readBackupMetadata(path)
+	if err != nil {
+		return "", err
+	}
+	if metadata.Version == 1 && metadata.Database != "" {
+		return BackupModeFull, nil
+	}
+	if metadata.Version >= 3 && metadata.Mode == BackupModeFull {
+		return BackupModeFull, nil
+	}
+	if metadata.Version >= 2 && (metadata.Mode == BackupModeSettings || metadata.Data != "") {
+		return BackupModeSettings, nil
+	}
+	return "", fmt.Errorf("unsupported backup format")
+}
+
+// RestoreSettingsFromBackup replaces only Providers, Provider Models, and Configurations.
+// The caller must close the active application database before invoking this function.
+func RestoreSettingsFromBackup(path string) error {
+	if err := validateSettingsBackup(path); err != nil {
+		return err
+	}
+
+	payload, err := readSettingsBackupPayload(path)
+	if err != nil {
+		return err
+	}
+
 	settings, err := LoadStorageSettings()
 	if err != nil {
 		return err
 	}
-	if err := validateBackup(path); err != nil {
+
+	conn, err := sql.Open("sqlite", settings.DatabasePath)
+	if err != nil {
+		return fmt.Errorf("open database for restore: %w", err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.Exec(`PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;`); err != nil {
+		return fmt.Errorf("prepare database for restore: %w", err)
+	}
+
+	maintenanceDB := &DB{conn: conn, imageDir: settings.ImagesPath}
+	return maintenanceDB.restorePayload(payload)
+}
+
+func readSettingsBackupPayload(path string) (BackupPayload, error) {
+	tmpDir, err := os.MkdirTemp("", "evoca-restore-settings-")
+	if err != nil {
+		return BackupPayload{}, err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	if err := extractZipSafely(path, tmpDir); err != nil {
+		return BackupPayload{}, err
+	}
+	payloadPath := filepath.Join(tmpDir, "data", "backup.json")
+	payloadData, err := os.ReadFile(payloadPath)
+	if err != nil {
+		return BackupPayload{}, fmt.Errorf("read backup data: %w", err)
+	}
+	var payload BackupPayload
+	if err := json.Unmarshal(payloadData, &payload); err != nil {
+		return BackupPayload{}, fmt.Errorf("invalid backup data: %w", err)
+	}
+	return payload, nil
+}
+
+func (d *DB) RestoreFromBackup(path string) error {
+	mode, err := ReadBackupMode(path)
+	if err != nil {
+		return err
+	}
+	if mode != BackupModeSettings {
+		return fmt.Errorf("this is a full-program backup; restore it as a full backup")
+	}
+	return RestoreSettingsFromBackup(path)
+}
+
+// RestoreFullFromBackup replaces the active database file and History images.
+// The caller must close the active database connection before calling this method.
+func RestoreFullFromBackup(path string) error {
+	settings, err := LoadStorageSettings()
+	if err != nil {
+		return err
+	}
+	if err := validateFullBackup(path); err != nil {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(settings.DatabasePath), 0o755); err != nil {
-		return err
-	}
-	tmpDir, err := os.MkdirTemp("", "evoca-restore-")
+	tmpDir, err := os.MkdirTemp("", "evoca-restore-full-")
 	if err != nil {
 		return err
 	}
@@ -108,13 +294,15 @@ func RestoreFromBackup(path string) error {
 		return fmt.Errorf("backup does not contain a database")
 	}
 
-	// Restore the database atomically as far as the filesystem allows. The caller closes the active DB first.
-	if err := copyFile(backupDB, settings.DatabasePath); err != nil {
+	if err := os.MkdirAll(filepath.Dir(settings.DatabasePath), 0o755); err != nil {
 		return err
+	}
+	if err := copyFile(backupDB, settings.DatabasePath); err != nil {
+		return fmt.Errorf("restore database: %w", err)
 	}
 
 	if err := os.RemoveAll(settings.ImagesPath); err != nil {
-		return err
+		return fmt.Errorf("clear history images: %w", err)
 	}
 	if err := os.MkdirAll(settings.ImagesPath, 0o755); err != nil {
 		return err
@@ -122,36 +310,190 @@ func RestoreFromBackup(path string) error {
 	backupImages := filepath.Join(tmpDir, "images")
 	if info, statErr := os.Stat(backupImages); statErr == nil && info.IsDir() {
 		if err := copyDir(backupImages, settings.ImagesPath); err != nil {
-			return err
+			return fmt.Errorf("restore history images: %w", err)
 		}
 	}
 	return nil
 }
 
-func validateBackup(path string) error {
-	f, err := os.Open(path)
+func readBackupMetadata(path string) (BackupMetadata, error) {
+	zr, err := zip.OpenReader(path)
+	if err != nil {
+		return BackupMetadata{}, fmt.Errorf("invalid backup: %w", err)
+	}
+	defer zr.Close()
+	for _, zf := range zr.File {
+		if filepath.ToSlash(zf.Name) != "metadata.json" {
+			continue
+		}
+		r, err := zf.Open()
+		if err != nil {
+			return BackupMetadata{}, err
+		}
+		data, err := io.ReadAll(r)
+		closeErr := r.Close()
+		if err != nil {
+			return BackupMetadata{}, err
+		}
+		if closeErr != nil {
+			return BackupMetadata{}, closeErr
+		}
+		var metadata BackupMetadata
+		if err := json.Unmarshal(data, &metadata); err != nil {
+			return BackupMetadata{}, fmt.Errorf("invalid backup metadata: %w", err)
+		}
+		return metadata, nil
+	}
+	return BackupMetadata{}, fmt.Errorf("invalid backup: metadata.json is missing")
+}
+
+func validateFullBackup(path string) error {
+	metadata, err := readBackupMetadata(path)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	st, err := f.Stat()
+	if metadata.Version == 1 && metadata.Database != "" {
+		return nil
+	}
+	if metadata.Version >= 3 && metadata.Mode == BackupModeFull {
+		return nil
+	}
+	return fmt.Errorf("selected file is not a full-program backup")
+}
+
+func validateSettingsBackup(path string) error {
+	metadata, err := readBackupMetadata(path)
 	if err != nil {
 		return err
 	}
-	zr, err := zip.NewReader(f, st.Size())
+	if metadata.Version < 2 || (metadata.Version >= 3 && metadata.Mode != BackupModeSettings) {
+		return fmt.Errorf("selected file is not a settings backup")
+	}
+	zr, err := zip.OpenReader(path)
 	if err != nil {
 		return fmt.Errorf("invalid backup: %w", err)
 	}
-	found := false
+	defer zr.Close()
 	for _, zf := range zr.File {
-		if filepath.ToSlash(zf.Name) == "database/evoca.db" {
-			found = true
-			break
+		if filepath.ToSlash(zf.Name) == "data/backup.json" {
+			return nil
 		}
 	}
-	if !found {
-		return fmt.Errorf("invalid backup: database/evoca.db is missing")
+	return fmt.Errorf("invalid backup: data/backup.json is missing")
+}
+
+func (d *DB) restorePayload(payload BackupPayload) error {
+	// Validate the complete payload before opening a write transaction. This prevents
+	// a malformed/inconsistent backup from partially deleting the current settings.
+	providerIDs := make(map[string]struct{}, len(payload.Providers))
+	for _, provider := range payload.Providers {
+		if strings.TrimSpace(provider.ID) == "" || strings.TrimSpace(provider.Name) == "" {
+			return fmt.Errorf("backup contains an invalid provider")
+		}
+		if _, exists := providerIDs[provider.ID]; exists {
+			return fmt.Errorf("backup contains duplicate provider %q", provider.ID)
+		}
+		providerIDs[provider.ID] = struct{}{}
 	}
+
+	modelIDs := make(map[string]struct{}, len(payload.Models))
+	modelsByProvider := make(map[string]map[string]struct{})
+	for _, model := range payload.Models {
+		if strings.TrimSpace(model.ID) == "" || strings.TrimSpace(model.ProviderID) == "" || strings.TrimSpace(model.Name) == "" {
+			return fmt.Errorf("backup contains an invalid provider model")
+		}
+		if _, exists := modelIDs[model.ID]; exists {
+			return fmt.Errorf("backup contains duplicate provider model %q", model.ID)
+		}
+		if _, ok := providerIDs[model.ProviderID]; !ok {
+			return fmt.Errorf("backup model %q references missing provider %q", model.ID, model.ProviderID)
+		}
+		modelIDs[model.ID] = struct{}{}
+		if modelsByProvider[model.ProviderID] == nil {
+			modelsByProvider[model.ProviderID] = make(map[string]struct{})
+		}
+		modelsByProvider[model.ProviderID][model.Name] = struct{}{}
+	}
+
+	configIDs := make(map[string]struct{}, len(payload.Configurations))
+	for _, config := range payload.Configurations {
+		if strings.TrimSpace(config.ID) == "" || strings.TrimSpace(config.Name) == "" || strings.TrimSpace(config.ProviderID) == "" || strings.TrimSpace(config.Model) == "" {
+			return fmt.Errorf("backup contains an invalid configuration")
+		}
+		if _, exists := configIDs[config.ID]; exists {
+			return fmt.Errorf("backup contains duplicate configuration %q", config.ID)
+		}
+		if _, ok := providerIDs[config.ProviderID]; !ok {
+			return fmt.Errorf("configuration %q references missing provider %q", config.ID, config.ProviderID)
+		}
+		if _, ok := modelsByProvider[config.ProviderID][config.Model]; !ok {
+			return fmt.Errorf("configuration %q references missing model %q for provider %q", config.ID, config.Model, config.ProviderID)
+		}
+		configIDs[config.ID] = struct{}{}
+	}
+
+	tx, err := d.conn.Begin()
+	if err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if _, err = tx.Exec(`DELETE FROM configurations`); err != nil {
+		return fmt.Errorf("clear configurations: %w", err)
+	}
+	if _, err = tx.Exec(`DELETE FROM provider_models`); err != nil {
+		return fmt.Errorf("clear provider models: %w", err)
+	}
+	if _, err = tx.Exec(`DELETE FROM providers`); err != nil {
+		return fmt.Errorf("clear providers: %w", err)
+	}
+
+	for _, provider := range payload.Providers {
+		if provider.Kind == "" {
+			provider.Kind = "openai_compatible"
+		}
+		if provider.HeadersJSON == "" {
+			provider.HeadersJSON = "{}"
+		}
+		if _, err = tx.Exec(`
+			INSERT INTO providers(id,name,kind,base_url,credential_ref,api_key_env,headers_json,created_at)
+			VALUES(?,?,?,?,?,?,?,?)
+		`, provider.ID, provider.Name, provider.Kind, provider.BaseURL, provider.CredentialRef, provider.APIKeyEnv, provider.HeadersJSON, provider.CreatedAt); err != nil {
+			return fmt.Errorf("restore provider %q: %w", provider.ID, err)
+		}
+	}
+
+	for _, model := range payload.Models {
+		if _, err = tx.Exec(`
+			INSERT INTO provider_models(id,provider_id,name,display_name,created_at)
+			VALUES(?,?,?,?,?)
+		`, model.ID, model.ProviderID, model.Name, model.DisplayName, model.CreatedAt); err != nil {
+			return fmt.Errorf("restore model %q: %w", model.ID, err)
+		}
+	}
+
+	for _, config := range payload.Configurations {
+		if _, err = tx.Exec(`
+			INSERT INTO configurations(
+				id,name,description,icon,provider_id,model,spell,input_type,output_type,
+				temperature,max_tokens,pinned,last_used_at,use_count,created_at,updated_at
+			) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		`, config.ID, config.Name, config.Description, config.Icon, config.ProviderID, config.Model, config.Spell,
+			config.InputType, config.OutputType, config.Temperature, config.MaxTokens, boolToInt(config.Pinned),
+			config.LastUsedAt, config.UseCount, config.CreatedAt, config.UpdatedAt); err != nil {
+			return fmt.Errorf("restore configuration %q: %w", config.ID, err)
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("commit restore: %w", err)
+	}
+	committed = true
 	return nil
 }
 
@@ -190,7 +532,7 @@ func extractZipSafely(path, dest string) error {
 		}
 		w, err := os.OpenFile(abs, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
 		if err != nil {
-			r.Close()
+			_ = r.Close()
 			return err
 		}
 		_, cpErr := io.Copy(w, r)
