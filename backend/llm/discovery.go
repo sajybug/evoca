@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/evoca-dev/evoca/backend/credentials"
-	"github.com/evoca-dev/evoca/backend/db"
+	"github.com/sajybug/evoca/backend/credentials"
+	"github.com/sajybug/evoca/backend/db"
 )
 
 type DiscoveredModel struct {

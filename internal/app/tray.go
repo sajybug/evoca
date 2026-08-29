@@ -1,17 +1,16 @@
-package main
+package app
 
 import (
 	_ "embed"
 
+	"github.com/sajybug/evoca/assets"
 	"github.com/secoba/systray"
 )
 
-//go:embed assets/evoca.ico
-var trayIcon []byte
 
 func (a *App) startTray() {
 	go systray.Run(func() {
-		systray.SetIcon(trayIcon)
+		systray.SetIcon(assets.EvocaIcon)
 		systray.SetTitle("eVoca")
 		systray.SetTooltip("eVoca")
 

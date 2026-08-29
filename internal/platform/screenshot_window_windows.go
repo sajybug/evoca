@@ -1,6 +1,6 @@
 //go:build windows
 
-package main
+package platform
 
 import (
 	"fmt"
@@ -56,7 +56,7 @@ func setScreenshotWindowCloaked(hwnd uintptr, cloaked bool) error {
 // have its last rendered surface in the compositor for a frame. Cloaking
 // removes that surface from composition, so BitBlt cannot capture a stale or
 // blurred eVoca frame.
-func hideScreenshotWindowForCapture() error {
+func HideScreenshotWindowForCapture() error {
 	hwnd := findEvocaWindow()
 	if hwnd == 0 {
 		return fmt.Errorf("eVoca window handle not found")
@@ -74,7 +74,7 @@ func hideScreenshotWindowForCapture() error {
 	return nil
 }
 
-func uncloakScreenshotWindow() error {
+func UncloakScreenshotWindow() error {
 	hwnd := findEvocaWindow()
 	if hwnd == 0 {
 		return fmt.Errorf("eVoca window handle not found")
@@ -89,7 +89,7 @@ func uncloakScreenshotWindow() error {
 // showScreenshotWindowNoActivate reveals and resizes the Wails window without
 // foreground activation. This prevents Windows from flashing/bouncing the
 // taskbar button during screenshot capture.
-func showScreenshotWindowNoActivate(width, height int) error {
+func ShowScreenshotWindowNoActivate(width, height int) error {
 	hwnd := findEvocaWindow()
 	if hwnd == 0 {
 		return fmt.Errorf("eVoca window handle not found")
@@ -111,7 +111,7 @@ func showScreenshotWindowNoActivate(width, height int) error {
 	return nil
 }
 
-func getEvocaWindowRect() (screenshotWindowRect, error) {
+func GetEvocaWindowRect() (screenshotWindowRect, error) {
 	hwnd := findEvocaWindow()
 	if hwnd == 0 {
 		return screenshotWindowRect{}, fmt.Errorf("eVoca window handle not found")
@@ -123,7 +123,7 @@ func getEvocaWindowRect() (screenshotWindowRect, error) {
 	return rect, nil
 }
 
-func restoreEvocaWindowRect(rect screenshotWindowRect) error {
+func RestoreEvocaWindowRect(rect screenshotWindowRect) error {
 	hwnd := findEvocaWindow()
 	if hwnd == 0 {
 		return fmt.Errorf("eVoca window handle not found")

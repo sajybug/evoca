@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -12,10 +12,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/evoca-dev/evoca/backend/credentials"
-	"github.com/evoca-dev/evoca/backend/db"
-	"github.com/evoca-dev/evoca/backend/hotkey"
-	"github.com/evoca-dev/evoca/backend/llm"
+	"github.com/sajybug/evoca/backend/credentials"
+	"github.com/sajybug/evoca/backend/db"
+	"github.com/sajybug/evoca/backend/hotkey"
+	"github.com/sajybug/evoca/backend/llm"
+	"github.com/sajybug/evoca/internal/platform"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -34,10 +35,10 @@ type App struct {
 }
 
 func NewApp() *App {
-	return &App{streams: make(map[string]context.CancelFunc), credentialStore: credentials.NewWindowsStore()}
+	return &App{streams: make(map[string]context.CancelFunc), credentialStore: credentials.NewStore()}
 }
 
-func (a *App) startup(ctx context.Context) {
+func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 
 	database, err := db.Open(ctx)
@@ -61,21 +62,21 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.hotkey = manager
 	a.startTray()
-	startWindowFocusWatcher()
+	platform.StartWindowFocusWatcher()
 }
 
-func (a *App) domReady(ctx context.Context) {
+func (a *App) DomReady(ctx context.Context) {
 	runtime.WindowHide(ctx)
 }
 
-func (a *App) shutdown(ctx context.Context) {
+func (a *App) Shutdown(ctx context.Context) {
 	a.streamMu.Lock()
 	for _, cancel := range a.streams {
 		cancel()
 	}
 	a.streams = make(map[string]context.CancelFunc)
 	a.streamMu.Unlock()
-	stopWindowFocusWatcher()
+	platform.StopWindowFocusWatcher()
 	a.stopTray()
 	if a.hotkey != nil {
 		_ = a.hotkey.Stop()
@@ -126,15 +127,15 @@ func (a *App) BeginScreenshot() (string, error) {
 	// runtime.WindowHide alone can leave one transitional/blurred frame visible
 	// long enough for BitBlt to capture it.
 	a.HideOverlay()
-	if err := hideScreenshotWindowForCapture(); err != nil {
-		_ = uncloakScreenshotWindow()
+	if err := platform.HideScreenshotWindowForCapture(); err != nil {
+		_ = platform.UncloakScreenshotWindow()
 		runtime.WindowShow(a.ctx)
 		a.overlayVisible = true
 		return "", err
 	}
-	pngData, err := capturePrimaryScreen()
+	pngData, err := platform.CapturePrimaryScreen()
 	if err != nil {
-		_ = uncloakScreenshotWindow()
+		_ = platform.UncloakScreenshotWindow()
 		runtime.WindowShow(a.ctx)
 		a.overlayVisible = true
 		return "", err
@@ -142,7 +143,7 @@ func (a *App) BeginScreenshot() (string, error) {
 	// The capture is complete; restore DWM composition before showing the
 	// interactive fullscreen screenshot selector. The captured PNG is already
 	// isolated from eVoca.
-	_ = uncloakScreenshotWindow()
+	_ = platform.UncloakScreenshotWindow()
 	a.screenshotMu.Lock()
 	a.screenshotPNG = pngData
 	a.screenshotMu.Unlock()
@@ -160,7 +161,7 @@ func (a *App) PreviewScreenshot(x, y, width, height, viewportWidth, viewportHeig
 	if len(pngData) == 0 {
 		return "", fmt.Errorf("no screenshot is available")
 	}
-	imageBase64, err := cropPNG(pngData, x, y, width, height, viewportWidth, viewportHeight)
+	imageBase64, err := platform.CropPNG(pngData, x, y, width, height, viewportWidth, viewportHeight)
 	if err != nil {
 		return "", err
 	}
@@ -262,7 +263,7 @@ func (a *App) ChooseBackupSavePath(current string) (string, error) {
 	}
 	// Native file dialogs temporarily own activation/focus. Suspend the eVoca
 	// focus recovery watcher so it cannot steal the dialog back to the main window.
-	releaseFocusRecovery := suppressWindowFocusRecovery()
+	releaseFocusRecovery := platform.SuppressWindowFocusRecovery()
 	defer releaseFocusRecovery()
 
 	defaultFilename := "eVoca-backup-" + time.Now().Format("2006-01-02_15-04-05") + ".zip"
@@ -284,7 +285,7 @@ func (a *App) ChooseBackupFile(current string) (string, error) {
 	if a.ctx == nil {
 		return "", fmt.Errorf("app is not initialized")
 	}
-	releaseFocusRecovery := suppressWindowFocusRecovery()
+	releaseFocusRecovery := platform.SuppressWindowFocusRecovery()
 	defer releaseFocusRecovery()
 	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		DefaultDirectory: filepath.Dir(current),
@@ -378,7 +379,7 @@ func (a *App) cancelActiveStreamsAndWait(timeout time.Duration) bool {
 }
 
 func (a *App) RecoverWindowFocus() {
-	recoverWindowFocus()
+	platform.RecoverWindowFocus()
 }
 
 func (a *App) DeleteExecution(id string) error {
@@ -477,11 +478,11 @@ func (a *App) DeleteConfiguration(id string) error {
 }
 
 func (a *App) IsAutostartEnabled() (bool, error) {
-	return isAutostartEnabled()
+	return platform.IsAutostartEnabled()
 }
 
 func (a *App) SetAutostart(enabled bool) error {
-	return setAutostartEnabled(enabled)
+	return platform.SetAutostartEnabled(enabled)
 }
 
 func (a *App) HasProviderCredential(ref string) bool {
@@ -714,7 +715,7 @@ func (a *App) StartScreenshotStream(id, input, requestID string, x, y, width, he
 		a.restoreScreenshotWindow()
 		return fmt.Errorf("no screenshot is available")
 	}
-	imageBase64, err := cropPNG(pngData, x, y, width, height, viewportWidth, viewportHeight)
+	imageBase64, err := platform.CropPNG(pngData, x, y, width, height, viewportWidth, viewportHeight)
 	if err != nil {
 		a.restoreScreenshotWindow()
 		return err

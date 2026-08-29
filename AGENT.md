@@ -423,6 +423,13 @@ Only record durable architectural/product changes here. Do not append repetitive
 - Hardened release-facing networking and backup handling with explicit HTTP timeout behavior and safer archive extraction limits/validation.
 - Established the open-source release workflow: normal changes are committed/pushed and validated by CI; stable public milestones are versioned with Git tags and published through the release workflow.
 
+### Phase 20 — Go project structure & cross-platform boundaries
+
+- Moved application orchestration into `internal/app` and OS-specific integrations into `internal/platform`; `main.go` now remains the root entrypoint only.
+- Kept backend domain packages under `backend/` and preserved existing Wails/frontend contracts and application behavior; no persistence or workflow logic changes were introduced.
+- Kept `main.App` as a thin Wails binding facade over `internal/app.App`, so the frontend binding namespace remains stable while implementation stays inside the application layer.
+- Normalized platform-facing APIs so non-Windows builds have matching no-op/unsupported implementations, preparing the project for future macOS/Linux support.
+
 ## Current Roadmap
 
 The completed phases are located here.
@@ -447,6 +454,7 @@ Phase 16 -> Launcher configuration productivity -> Done
 Phase 17 -> Configuration views, chat model override & focus recovery -> Done
 Phase 18 -> Scoped backup/restore, richer defaults & native focus recovery -> Done
 Phase 19 -> Open Source Release Preparation -> Done
+Phase 20 -> Go project structure & cross-platform boundaries -> Done
 ```
 
 The exact next Phase may change; when it does, update the roadmap rather than keeping contradictory plans.

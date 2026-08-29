@@ -1,6 +1,6 @@
 //go:build windows
 
-package main
+package platform
 
 import (
 	"sync"
@@ -31,7 +31,7 @@ var focusWatcherMu sync.Mutex
 var focusWatcherStop chan struct{}
 var focusWatcherSuppressed bool
 
-func suppressWindowFocusRecovery() func() {
+func SuppressWindowFocusRecovery() func() {
 	focusWatcherMu.Lock()
 	previous := focusWatcherSuppressed
 	focusWatcherSuppressed = true
@@ -50,7 +50,7 @@ func isWindowFocusRecoverySuppressed() bool {
 	return suppressed
 }
 
-func recoverWindowFocus() {
+func RecoverWindowFocus() {
 	hwnd := findEvocaWindow()
 	if hwnd == 0 {
 		return
@@ -73,7 +73,7 @@ func recoverWindowFocus() {
 // to another application and then moves the pointer back over eVoca. The
 // pointer is checked natively so the first click does not have to race a JS
 // pointerenter -> Go RPC round trip.
-func startWindowFocusWatcher() {
+func StartWindowFocusWatcher() {
 	focusWatcherMu.Lock()
 	defer focusWatcherMu.Unlock()
 	if focusWatcherStop != nil {
@@ -90,7 +90,7 @@ func startWindowFocusWatcher() {
 			select {
 			case <-ticker.C:
 				if !isWindowFocusRecoverySuppressed() && cursorIsOverEvoca() {
-					recoverWindowFocus()
+					RecoverWindowFocus()
 				}
 			case <-stop:
 				return
@@ -99,7 +99,7 @@ func startWindowFocusWatcher() {
 	}()
 }
 
-func stopWindowFocusWatcher() {
+func StopWindowFocusWatcher() {
 	focusWatcherMu.Lock()
 	defer focusWatcherMu.Unlock()
 	if focusWatcherStop == nil {

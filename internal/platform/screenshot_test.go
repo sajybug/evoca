@@ -1,4 +1,4 @@
-package main
+package platform
 
 import (
 	"bytes"
@@ -21,7 +21,7 @@ func TestCropPNGScalesViewportAndClipsBounds(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	encoded, err := cropPNG(src.Bytes(), 40, 10, 30, 30, 200, 100)
+	encoded, err := CropPNG(src.Bytes(), 40, 10, 30, 30, 200, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,10 +39,10 @@ func TestCropPNGScalesViewportAndClipsBounds(t *testing.T) {
 }
 
 func TestCropPNGRejectsInvalidSelection(t *testing.T) {
-	if _, err := cropPNG([]byte("not png"), 0, 0, 0, 10, 100, 100); err == nil {
+	if _, err := CropPNG([]byte("not png"), 0, 0, 0, 10, 100, 100); err == nil {
 		t.Fatal("expected invalid selection error")
 	}
-	if _, err := cropPNG([]byte("not png"), 0, 0, 10, 10, 100, 100); err == nil {
+	if _, err := CropPNG([]byte("not png"), 0, 0, 10, 10, 100, 100); err == nil {
 		t.Fatal("expected decode error")
 	}
 }

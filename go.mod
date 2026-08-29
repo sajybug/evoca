@@ -1,4 +1,4 @@
-module github.com/evoca-dev/evoca
+module github.com/sajybug/evoca
 
 go 1.25.0
 

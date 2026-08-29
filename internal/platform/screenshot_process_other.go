@@ -1,9 +1,9 @@
 //go:build !windows
 
-package main
+package platform
 
 import "fmt"
 
-func capturePrimaryScreen() ([]byte, error) {
+func CapturePrimaryScreen() ([]byte, error) {
 	return nil, fmt.Errorf("screenshot capture is currently supported on Windows only")
 }

@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/evoca-dev/evoca/backend/db"
+	"github.com/sajybug/evoca/backend/db"
 )
 
 func TestStreamOpenAICustomHeadersCannotOverrideCredential(t *testing.T) {

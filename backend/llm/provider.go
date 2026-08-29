@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/evoca-dev/evoca/backend/credentials"
-	"github.com/evoca-dev/evoca/backend/db"
+	"github.com/sajybug/evoca/backend/credentials"
+	"github.com/sajybug/evoca/backend/db"
 )
 
 type Request struct {
@@ -24,7 +24,7 @@ type Provider interface {
 }
 type Registry struct{ Credentials credentials.CredentialStore }
 
-func NewRegistry() *Registry { return &Registry{Credentials: credentials.NewWindowsStore()} }
+func NewRegistry() *Registry { return &Registry{Credentials: credentials.NewStore()} }
 func (r *Registry) Generate(provider db.Provider, request Request) (string, error) {
 	switch strings.ToLower(provider.Kind) {
 	case "openai_compatible":

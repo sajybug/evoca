@@ -6,7 +6,7 @@ import "fmt"
 
 type unsupportedStore struct{}
 
-func NewWindowsStore() CredentialStore { return unsupportedStore{} }
+func NewStore() CredentialStore { return unsupportedStore{} }
 func (unsupportedStore) Get(string) (string, error) {
 	return "", fmt.Errorf("Windows Credential Manager is available on Windows only")
 }

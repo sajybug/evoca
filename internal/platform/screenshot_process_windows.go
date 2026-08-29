@@ -1,6 +1,6 @@
 //go:build windows
 
-package main
+package platform
 
 import (
 	"bytes"
@@ -52,7 +52,7 @@ var (
 	deleteObject           = gdi32.NewProc("DeleteObject")
 )
 
-func capturePrimaryScreen() ([]byte, error) {
+func CapturePrimaryScreen() ([]byte, error) {
 	width, _, err := getMetric(smCxScreen)
 	if err != nil {
 		return nil, err

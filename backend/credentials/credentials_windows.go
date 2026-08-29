@@ -38,7 +38,7 @@ const credPersistLocalMachine = 2
 
 type WindowsCredentialStore struct{}
 
-func NewWindowsStore() CredentialStore { return WindowsCredentialStore{} }
+func NewStore() CredentialStore { return WindowsCredentialStore{} }
 
 func (WindowsCredentialStore) Get(ref string) (string, error) {
 	target, err := syscall.UTF16PtrFromString(normalizeTarget(ref))

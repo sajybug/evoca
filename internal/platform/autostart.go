@@ -1,6 +1,6 @@
 //go:build windows
 
-package main
+package platform
 
 import (
 	"fmt"
@@ -26,7 +26,7 @@ func autostartExecutable() (string, error) {
 	return exe, nil
 }
 
-func isAutostartEnabled() (bool, error) {
+func IsAutostartEnabled() (bool, error) {
 	key, err := registry.OpenKey(registry.CURRENT_USER, autostartRegistryPath, registry.QUERY_VALUE)
 	if err != nil {
 		if err == registry.ErrNotExist {
@@ -45,7 +45,7 @@ func isAutostartEnabled() (bool, error) {
 	return strings.TrimSpace(value) != "", nil
 }
 
-func setAutostartEnabled(enabled bool) error {
+func SetAutostartEnabled(enabled bool) error {
 	key, _, err := registry.CreateKey(registry.CURRENT_USER, autostartRegistryPath, registry.SET_VALUE)
 	if err != nil {
 		return err

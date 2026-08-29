@@ -4,7 +4,7 @@ import (
 	"embed"
 	"log"
 
-	"github.com/wailsapp/wails/v2"
+		"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 )
@@ -13,7 +13,7 @@ import (
 var assets embed.FS
 
 func main() {
-	app := NewApp()
+	application := NewApp()
 	err := wails.Run(&options.App{
 		Title:                    "eVoca",
 		Width:                    950,
@@ -27,10 +27,10 @@ func main() {
 		BackgroundColour:         options.NewRGBA(0, 0, 0, 0),
 		EnableDefaultContextMenu: false,
 		AssetServer:              &assetserver.Options{Assets: assets},
-		OnStartup:                app.startup,
-		OnDomReady:               app.domReady,
-		OnShutdown:               app.shutdown,
-		Bind:                     []interface{}{app},
+		OnStartup:                application.Startup,
+		OnDomReady:               application.DomReady,
+		OnShutdown:               application.Shutdown,
+		Bind:                     []interface{}{application},
 	})
 	if err != nil {
 		log.Fatal(err)

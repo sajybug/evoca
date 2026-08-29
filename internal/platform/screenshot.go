@@ -1,4 +1,4 @@
-package main
+package platform
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"image/png"
 )
 
-func cropPNG(data []byte, x, y, w, h, viewportW, viewportH int) (string, error) {
+func CropPNG(data []byte, x, y, w, h, viewportW, viewportH int) (string, error) {
 	if w <= 0 || h <= 0 || viewportW <= 0 || viewportH <= 0 {
 		return "", fmt.Errorf("invalid screenshot selection")
 	}
