@@ -84,7 +84,7 @@ func (p OpenAICompatible) Generate(req Request) (string, error) {
 		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := providerHTTPClient.Do(httpReq)
 	if err != nil {
 		return "", err
 	}

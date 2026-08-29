@@ -35,7 +35,7 @@ func streamOllama(ctx context.Context, provider db.Provider, req Request, onChun
 		return StreamResult{}, err
 	}
 	hreq.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(hreq)
+	resp, err := providerStreamHTTPClient.Do(hreq)
 	if err != nil {
 		return StreamResult{}, err
 	}
@@ -149,7 +149,7 @@ func streamOpenAI(ctx context.Context, provider db.Provider, req Request, onChun
 	if apiKey != "" {
 		hreq.Header.Set("Authorization", "Bearer "+apiKey)
 	}
-	resp, err := http.DefaultClient.Do(hreq)
+	resp, err := providerStreamHTTPClient.Do(hreq)
 	if err != nil {
 		return StreamResult{}, err
 	}

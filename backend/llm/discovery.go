@@ -2,11 +2,13 @@ package llm
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/evoca-dev/evoca/backend/credentials"
 	"github.com/evoca-dev/evoca/backend/db"
@@ -71,7 +73,9 @@ func doProviderGet(provider db.Provider, path string, store credentials.Credenti
 			base = "https://api.openai.com/v1"
 		}
 	}
-	req, err := http.NewRequest(http.MethodGet, base+path, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +86,7 @@ func doProviderGet(provider db.Provider, path string, store credentials.Credenti
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := providerHTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

@@ -15,8 +15,12 @@ import (
 type BackupMode string
 
 const (
-	BackupModeFull     BackupMode = "full"
-	BackupModeSettings BackupMode = "settings"
+	maxBackupArchiveBytes             = 512 << 20
+	maxBackupEntries                  = 10_000
+	maxBackupFileBytes                = 256 << 20
+	maxBackupExpandedBytes            = 768 << 20
+	BackupModeFull         BackupMode = "full"
+	BackupModeSettings     BackupMode = "settings"
 )
 
 type BackupMetadata struct {
@@ -348,6 +352,9 @@ func readBackupMetadata(path string) (BackupMetadata, error) {
 }
 
 func validateFullBackup(path string) error {
+	if err := validateBackupArchive(path); err != nil {
+		return err
+	}
 	metadata, err := readBackupMetadata(path)
 	if err != nil {
 		return err
@@ -362,6 +369,9 @@ func validateFullBackup(path string) error {
 }
 
 func validateSettingsBackup(path string) error {
+	if err := validateBackupArchive(path); err != nil {
+		return err
+	}
 	metadata, err := readBackupMetadata(path)
 	if err != nil {
 		return err
@@ -497,7 +507,46 @@ func (d *DB) restorePayload(payload BackupPayload) error {
 	return nil
 }
 
+func validateBackupArchive(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("stat backup: %w", err)
+	}
+	if info.Size() > maxBackupArchiveBytes {
+		return fmt.Errorf("backup is too large: %d bytes exceeds %d-byte limit", info.Size(), maxBackupArchiveBytes)
+	}
+	zr, err := zip.OpenReader(path)
+	if err != nil {
+		return fmt.Errorf("invalid backup: %w", err)
+	}
+	defer zr.Close()
+	if len(zr.File) > maxBackupEntries {
+		return fmt.Errorf("backup contains too many entries: %d", len(zr.File))
+	}
+	var expanded uint64
+	for _, file := range zr.File {
+		name := strings.TrimSuffix(filepath.FromSlash(file.Name), string(os.PathSeparator))
+		if name == "" || filepath.Clean(name) != name || filepath.IsAbs(name) {
+			return fmt.Errorf("invalid backup path: %s", file.Name)
+		}
+		if file.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("backup contains unsupported symlink: %s", file.Name)
+		}
+		if file.UncompressedSize64 > maxBackupFileBytes {
+			return fmt.Errorf("backup entry is too large: %s", file.Name)
+		}
+		expanded += file.UncompressedSize64
+		if expanded > maxBackupExpandedBytes {
+			return fmt.Errorf("backup expands beyond safe limit")
+		}
+	}
+	return nil
+}
+
 func extractZipSafely(path, dest string) error {
+	if err := validateBackupArchive(path); err != nil {
+		return err
+	}
 	zr, err := zip.OpenReader(path)
 	if err != nil {
 		return err
@@ -535,7 +584,7 @@ func extractZipSafely(path, dest string) error {
 			_ = r.Close()
 			return err
 		}
-		_, cpErr := io.Copy(w, r)
+		_, cpErr := io.Copy(w, io.LimitReader(r, maxBackupFileBytes+1))
 		closeErr1 := w.Close()
 		closeErr2 := r.Close()
 		if cpErr != nil {
@@ -546,6 +595,9 @@ func extractZipSafely(path, dest string) error {
 		}
 		if closeErr2 != nil {
 			return closeErr2
+		}
+		if file.UncompressedSize64 > maxBackupFileBytes {
+			return fmt.Errorf("backup entry is too large: %s", file.Name)
 		}
 	}
 	return nil

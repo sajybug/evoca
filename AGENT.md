@@ -414,6 +414,15 @@ Only record durable architectural/product changes here. Do not append repetitive
 - Settings restore transactions always rollback on any failure until commit succeeds.
 - Settings backups reject orphaned configurations so invalid restore payloads are not produced.
 
+### Phase 19 — Open Source Release Preparation
+
+- Prepared the repository for public open-source distribution with repository-level community and security files, including `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`, issue templates, and pull-request guidance.
+- Added GitHub Actions CI coverage for the project quality/build pipeline and a tag-driven release workflow for Windows artifacts.
+- Prepared automated release packaging for version tags in the `vMAJOR.MINOR.PATCH` format, including the Windows executable package, SHA256 checksums, and artifact provenance/attestation support.
+- Updated public documentation to better describe installation, release/distribution expectations, privacy/data handling, and sensitive backup contents; removed/fixed broken README asset references.
+- Hardened release-facing networking and backup handling with explicit HTTP timeout behavior and safer archive extraction limits/validation.
+- Established the open-source release workflow: normal changes are committed/pushed and validated by CI; stable public milestones are versioned with Git tags and published through the release workflow.
+
 ## Current Roadmap
 
 The completed phases are located here.
@@ -437,6 +446,7 @@ Phase 15 -> Markdown Rendering Enhancement -> Done
 Phase 16 -> Launcher configuration productivity -> Done
 Phase 17 -> Configuration views, chat model override & focus recovery -> Done
 Phase 18 -> Scoped backup/restore, richer defaults & native focus recovery -> Done
+Phase 19 -> Open Source Release Preparation -> Done
 ```
 
 The exact next Phase may change; when it does, update the roadmap rather than keeping contradictory plans.

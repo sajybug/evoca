@@ -34,19 +34,15 @@ eVoca is intentionally focused. It is not a general-purpose chat client and does
 - System-tray operation.
 - Go backend with a React + TypeScript frontend connected through Wails.
 
-## Screenshots
+## Privacy and data handling
 
-### Launcher
+eVoca is a local-first desktop application. Provider requests are made only when you run a configuration or explicitly test/discover a provider. Execution history can contain prompts, generated output, system prompts, provider/model information, and captured images. Treat full backups as sensitive files.
 
-![eVoca launcher](assets/screenshots/launcher.png)
+API keys are not included in settings or full backups. On Windows, credential references are stored separately through Windows Credential Manager when configured.
 
-### Configuration editor
+## Releases
 
-![Configuration editor](assets/screenshots/configuration-editor.png)
-
-### Provider settings
-
-![Provider settings](assets/screenshots/providers.png)
+Official Windows builds are published from Git tags. Release artifacts include a SHA-256 checksum file; source-tree builds remain available for contributors who prefer to build locally.
 
 ## Platform
 
@@ -60,9 +56,9 @@ Cross-platform support is not a current project goal.
 
 - Windows 10/11.
 - Go 1.25 or newer.
-- Node.js and npm.
+- Node.js 20+ and npm.
 - WebView2 runtime.
-- Wails v2 CLI.
+- Wails v2 CLI 2.13.x.
 
 ### Run the frontend
 
@@ -94,9 +90,20 @@ To create a Windows production build:
 wails build
 ```
 
-## Formatting and linting
+## Formatting, linting, and checks
 
-Go formatting uses the standard `gofmt` tool. Frontend formatting and linting use Prettier.
+Go formatting uses the standard `gofmt` tool. Frontend source is type-checked with TypeScript and formatted with Prettier. Repository CI runs the same checks automatically.
+
+```bash
+# Go formatting check
+gofmt -l .
+
+# Frontend checks
+cd frontend
+npm install
+npm run lint
+npm run format:check
+```
 
 ## Configuration and providers
 
