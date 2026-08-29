@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { evoca } from '../../services/evoca';
 import type { Configuration, Execution, ExecutionPage } from '../../types/domain';
 import { Markdown } from '../overlay/Markdown';
@@ -42,36 +42,39 @@ export function HistoryPanel({
   const [deleting, setDeleting] = useState(false);
   const [confirm, setConfirm] = useState<'all' | 'selected' | null>(null);
 
-  async function loadHistory(nextPage = page) {
-    setLoading(true);
-    try {
-      const next = await evoca.listExecutions(
-        nextPage,
-        20,
-        search,
-        status,
-        requestType,
-        configurationId,
-      );
-      setData(
-        next && Array.isArray(next.items)
-          ? next
-          : { items: [], page: 1, pageSize: 20, total: 0, totalPages: 0 },
-      );
-      setLoadError('');
-    } catch (error) {
-      console.error('history load failed', error);
-      setLoadError(String(error));
-    } finally {
-      setLoading(false);
-    }
-  }
+  const loadHistory = useCallback(
+    async (nextPage = page): Promise<void> => {
+      setLoading(true);
+      try {
+        const next = await evoca.listExecutions(
+          nextPage,
+          20,
+          search,
+          status,
+          requestType,
+          configurationId,
+        );
+        if (next && Array.isArray(next.items)) {
+          if (next.totalPages > 0 && nextPage > next.totalPages) setPage(next.totalPages);
+          setData(next);
+        } else {
+          setData({ items: [], page: 1, pageSize: 20, total: 0, totalPages: 0 });
+        }
+        setLoadError('');
+      } catch (error) {
+        setLoadError(String(error));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [configurationId, page, requestType, search, status],
+  );
+
   useEffect(() => {
-    void loadHistory();
-  }, [page, search, status, requestType, configurationId]);
-  useEffect(() => {
-    if (data.totalPages > 0 && page > data.totalPages) setPage(data.totalPages);
-  }, [data.totalPages, page]);
+    queueMicrotask(() => {
+      void loadHistory();
+    });
+  }, [loadHistory]);
   const selectedConfig = useMemo(
     () => configurations.find((x) => x.id === selected?.configurationId),
     [configurations, selected],

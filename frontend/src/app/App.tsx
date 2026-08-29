@@ -15,8 +15,14 @@ export default function App() {
   const open = useOverlayStore((s) => s.open);
 
   useEffect(() => {
-    evoca.getConfigurations().then(setConfigurations).catch(console.error);
-    evoca.getProviders().then(setProviders).catch(console.error);
+    evoca
+      .getConfigurations()
+      .then(setConfigurations)
+      .catch(() => undefined);
+    evoca
+      .getProviders()
+      .then(setProviders)
+      .catch(() => undefined);
 
     const cancel = EventsOn('evoca:overlay', () => {
       setShowSettings(false);
@@ -31,8 +37,8 @@ export default function App() {
         ]);
         setConfigurations(nextConfigurations);
         setProviders(nextProviders);
-      } catch (error) {
-        console.error('restored data reload failed', error);
+      } catch {
+        // Keep the current UI state when restored data cannot be reloaded.
       }
     });
 

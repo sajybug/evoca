@@ -24,54 +24,6 @@ const settingsButtonClass =
 const settingsTextareaClass =
   'min-h-[120px] w-full resize-y rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] leading-5 text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25';
 
-function Icon({ name }: { name: 'trash' | 'save' | 'x' | 'power' }) {
-  const common = {
-    viewBox: '0 0 24 24',
-    fill: 'none',
-    stroke: 'currentColor',
-    strokeWidth: 1.8,
-    strokeLinecap: 'round' as const,
-    strokeLinejoin: 'round' as const,
-  };
-
-  if (name === 'trash') {
-    return (
-      <svg {...common} aria-hidden='true'>
-        <path d='M4 7h16' />
-        <path d='M9 7V4h6v3' />
-        <path d='M7 7l1 13h8l1-13' />
-        <path d='M10 11v5M14 11v5' />
-      </svg>
-    );
-  }
-
-  if (name === 'save') {
-    return (
-      <svg {...common} aria-hidden='true'>
-        <path d='M5 4h12l2 2v14H5z' />
-        <path d='M8 4v6h8V4' />
-        <path d='M8 20v-6h8v6' />
-      </svg>
-    );
-  }
-
-  if (name === 'x') {
-    return (
-      <svg {...common} aria-hidden='true'>
-        <path d='M6 6l12 12M18 6L6 18' />
-      </svg>
-    );
-  }
-
-  // power
-  return (
-    <svg {...common} aria-hidden='true'>
-      <path d='M12 3v9' />
-      <path d='M6.35 6.35a8 8 0 1 0 11.3 0' />
-    </svg>
-  );
-}
-
 const freshConfiguration = (providers: Provider[]): Configuration => ({
   id: crypto.randomUUID(),
   name: 'New Configuration',
@@ -151,16 +103,29 @@ export function Settings({ configurations, onChange, onClose }: Props) {
 
   useEffect(() => {
     let active = true;
+
     evoca
       .getProviders()
       .then((data) => {
         if (!active) return;
-        // Wails may return null/nil for an empty result set. Always keep UI state as arrays.
+
+        // Wails may return null/nil for an empty result set.
         const nextProviders = Array.isArray(data) ? data : [];
+
         setProviders(nextProviders);
-        if (nextProviders.length && !provider) setProvider(nextProviders[0]);
+
+        if (nextProviders.length) {
+          setProvider((currentProvider) => {
+            return currentProvider || nextProviders[0];
+          });
+        }
       })
-      .catch((error) => setMessage(String(error)));
+      .catch((error) => {
+        if (active) {
+          setMessage(String(error));
+        }
+      });
+
     return () => {
       active = false;
     };
@@ -168,10 +133,7 @@ export function Settings({ configurations, onChange, onClose }: Props) {
 
   useEffect(() => {
     const providerId = configuration?.providerId;
-    if (!providerId) {
-      setConfigurationModels([]);
-      return;
-    }
+    if (!providerId) return;
 
     let active = true;
     evoca
@@ -201,12 +163,13 @@ export function Settings({ configurations, onChange, onClose }: Props) {
   }, [configuration?.providerId]);
 
   useEffect(() => {
-    setProviderCredential('');
-    setCredentialSaved(false);
-    if (!provider?.credentialRef || !providers.some((item) => item.id === provider.id)) return;
+    const providerId = provider?.id;
+    const credentialRef = provider?.credentialRef;
+    if (!providerId || !credentialRef || !providers.some((item) => item.id === providerId)) return;
+
     let active = true;
     evoca
-      .hasProviderCredential(provider.credentialRef)
+      .hasProviderCredential(credentialRef)
       .then((saved) => {
         if (active) setCredentialSaved(saved);
       })
@@ -220,14 +183,12 @@ export function Settings({ configurations, onChange, onClose }: Props) {
 
   useEffect(() => {
     // Do not hit the DB for a brand-new unsaved provider.
-    if (!provider || !providers.some((item) => item.id === provider.id)) {
-      setModels([]);
-      return;
-    }
+    const providerId = provider?.id;
+    if (!providerId || !providers.some((item) => item.id === providerId)) return;
 
     let active = true;
     evoca
-      .getProviderModels(provider.id)
+      .getProviderModels(providerId)
       .then((data) => {
         if (active) setModels(Array.isArray(data) ? data : []);
       })
@@ -238,11 +199,13 @@ export function Settings({ configurations, onChange, onClose }: Props) {
     return () => {
       active = false;
     };
-  }, [provider, providers]);
+  }, [provider?.id, providers]);
 
   function addProvider() {
     const next = freshProvider();
     setMessage('');
+    setProviderCredential('');
+    setCredentialSaved(false);
     setProvider(next);
     setModels([]);
     setDiscoveredModels([]);
@@ -1079,6 +1042,9 @@ export function Settings({ configurations, onChange, onClose }: Props) {
                       : 'mb-1 w-full rounded-[11px] border border-transparent bg-transparent px-3 py-2.5 text-left transition hover:border-white/[.06] hover:bg-white/[.04]'
                   }
                   onClick={() => {
+                    setProviderCredential('');
+                    setCredentialSaved(false);
+                    setModels([]);
                     setProvider(r);
                     setDiscoveredModels([]);
                     setSection('providers');
@@ -1165,8 +1131,9 @@ export function Settings({ configurations, onChange, onClose }: Props) {
                         className='w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25'
                         value={provider.credentialRef ?? ''}
                         onChange={(e) => {
-                          setProvider({ ...provider, credentialRef: e.target.value });
+                          setProviderCredential('');
                           setCredentialSaved(false);
+                          setProvider({ ...provider, credentialRef: e.target.value });
                         }}
                       />
                     </label>

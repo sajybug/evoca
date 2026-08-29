@@ -13,3 +13,5 @@ out
 
 # generated artifacts
 *.snap
+
+src/wailsjs/
