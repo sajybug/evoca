@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -260,7 +261,7 @@ func (d *DB) ensureColumn(table, column, definition string) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var cid int
@@ -306,7 +307,7 @@ func (d *DB) ListConfigurations() ([]Configuration, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []Configuration
 	for rows.Next() {
@@ -478,7 +479,7 @@ func (d *DB) ListProviders() ([]Provider, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []Provider
 	for rows.Next() {
@@ -595,7 +596,7 @@ func (d *DB) ListProviderModels(providerID string) ([]ProviderModel, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []ProviderModel
 	for rows.Next() {
@@ -639,7 +640,7 @@ func (d *DB) SaveProviderModel(m ProviderModel) error {
 	if err == nil {
 		return fmt.Errorf("model %q already exists for this provider", m.Name)
 	}
-	if err != sql.ErrNoRows {
+	if !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
 
@@ -659,7 +660,7 @@ func (d *DB) SaveProviderModel(m ProviderModel) error {
 func (d *DB) DeleteProviderModel(id string) error {
 	var providerID, name string
 	err := d.conn.QueryRow(`SELECT provider_id,name FROM provider_models WHERE id=?`, id).Scan(&providerID, &name)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("model %q does not exist", id)
 	}
 	if err != nil {

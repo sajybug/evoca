@@ -1,0 +1,22 @@
+version: "2"
+
+run:
+  timeout: 5m
+  exclusions:
+    paths:
+      - frontend
+      - build/bin
+      - node_modules
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - errorlint
+    - forcetypeassert
+    - nilerr
+

@@ -230,7 +230,10 @@ func RestoreSettingsFromBackup(path string) error {
 	if err != nil {
 		return fmt.Errorf("open database for restore: %w", err)
 	}
-	defer conn.Close()
+
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	if _, err := conn.Exec(`PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;`); err != nil {
 		return fmt.Errorf("prepare database for restore: %w", err)
@@ -245,7 +248,10 @@ func readSettingsBackupPayload(path string) (BackupPayload, error) {
 	if err != nil {
 		return BackupPayload{}, err
 	}
-	defer os.RemoveAll(tmpDir)
+
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	if err := extractZipSafely(path, tmpDir); err != nil {
 		return BackupPayload{}, err
@@ -288,7 +294,10 @@ func RestoreFullFromBackup(path string) error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmpDir)
+
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
 
 	if err := extractZipSafely(path, tmpDir); err != nil {
 		return err
@@ -325,7 +334,9 @@ func readBackupMetadata(path string) (BackupMetadata, error) {
 	if err != nil {
 		return BackupMetadata{}, fmt.Errorf("invalid backup: %w", err)
 	}
-	defer zr.Close()
+	defer func() {
+		_ = zr.Close()
+	}()
 	for _, zf := range zr.File {
 		if filepath.ToSlash(zf.Name) != "metadata.json" {
 			continue
@@ -383,7 +394,9 @@ func validateSettingsBackup(path string) error {
 	if err != nil {
 		return fmt.Errorf("invalid backup: %w", err)
 	}
-	defer zr.Close()
+	defer func() {
+		_ = zr.Close()
+	}()
 	for _, zf := range zr.File {
 		if filepath.ToSlash(zf.Name) == "data/backup.json" {
 			return nil
@@ -519,7 +532,9 @@ func validateBackupArchive(path string) error {
 	if err != nil {
 		return fmt.Errorf("invalid backup: %w", err)
 	}
-	defer zr.Close()
+	defer func() {
+		_ = zr.Close()
+	}()
 	if len(zr.File) > maxBackupEntries {
 		return fmt.Errorf("backup contains too many entries: %d", len(zr.File))
 	}
@@ -551,7 +566,9 @@ func extractZipSafely(path, dest string) error {
 	if err != nil {
 		return err
 	}
-	defer zr.Close()
+	defer func() {
+		_ = zr.Close()
+	}()
 	base, err := filepath.Abs(dest)
 	if err != nil {
 		return err
@@ -608,7 +625,9 @@ func addFileToZip(zw *zip.Writer, source, name string) error {
 	if err != nil {
 		return err
 	}
-	defer src.Close()
+	defer func() {
+		_ = src.Close()
+	}()
 	info, err := src.Stat()
 	if err != nil {
 		return err
@@ -641,7 +660,9 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() {
+		_ = in.Close()
+	}()
 	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err

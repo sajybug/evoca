@@ -25,7 +25,7 @@ func (p Ollama) Generate(req Request) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		return "", fmt.Errorf("ollama returned HTTP %d", resp.StatusCode)
 	}

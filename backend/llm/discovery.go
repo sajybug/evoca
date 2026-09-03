@@ -90,7 +90,7 @@ func doProviderGet(provider db.Provider, path string, store credentials.Credenti
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("provider returned HTTP %d", resp.StatusCode)
 	}

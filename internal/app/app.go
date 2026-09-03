@@ -340,7 +340,7 @@ func (a *App) RestoreBackup(path string) error {
 	if restoreErr != nil {
 		reopened, reopenErr := db.Open(a.ctx)
 		if reopenErr != nil {
-			return fmt.Errorf("restore failed: %v; reopen database failed: %w", restoreErr, reopenErr)
+			return fmt.Errorf("restore failed: %w; reopen database failed: %w", restoreErr, reopenErr)
 		}
 		a.database = reopened
 		return restoreErr

@@ -2,7 +2,7 @@
 
 **eVoca is a Windows-first launcher for reusable AI configurations.**
 
-Press a global hotkey, pick a configuration, enter your input, and get the result without leaving the application you are working in.
+Press a global hotkey, pick a configuration, enter your prompt, and get the result without leaving the application you are working in.
 
 > **Status:** `v0.1.0` — early open-source release.
 
@@ -24,41 +24,54 @@ eVoca is intentionally focused. It is not a general-purpose chat client and does
 
 ## Features
 
-- Global `Ctrl + Space` launcher.
-- Searchable, reusable AI configurations.
-- Configurable system prompts, temperature, and max tokens.
-- Provider and model management.
-- OpenAI-compatible and Ollama providers.
-- Execution history stored locally in SQLite.
-- Screenshot capture and preview workflow.
-- System-tray operation.
-- Go backend with a React + TypeScript frontend connected through Wails.
+* Global `Ctrl + Space` launcher.
+* Searchable, reusable AI configurations.
+* Configurable system prompts, temperature, and max tokens.
+* Provider and model management.
+* OpenAI-compatible and Ollama providers.
+* Execution history stored locally in SQLite.
+* Screenshot capture and preview.
+* System-tray operation.
+* Go backend with a React + TypeScript frontend connected through Wails.
 
 ## Privacy and data handling
 
-eVoca is a local-first desktop application. Provider requests are made only when you run a configuration or explicitly test/discover a provider. Execution history can contain prompts, generated output, system prompts, provider/model information, and captured images. Treat full backups as sensitive files.
+eVoca is a local-first desktop application. Provider requests are made only when you run a configuration or explicitly test or discover a provider.
+
+Execution history can contain prompts, generated output, system prompts, provider and model information, and captured images. Treat full backups as sensitive files.
 
 API keys are not included in settings or full backups. On Windows, credential references are stored separately through Windows Credential Manager when configured.
 
 ## Releases
 
-Official Windows builds are published from Git tags. Release artifacts include a SHA-256 checksum file; source-tree builds remain available for contributors who prefer to build locally.
+Official Windows builds are published from Git tags. Release artifacts include a SHA-256 checksum file. Building from source remains available for contributors who prefer to build locally.
 
 ## Platform
 
 eVoca currently targets **Windows 10/11** and uses WebView2 for the application UI.
 
-Cross-platform support is not a current project goal.
+Cross-platform support is not currently a project goal.
 
 ## Development
 
 ### Prerequisites
 
-- Windows 10/11.
-- Go 1.25 or newer.
-- Node.js 20+ and npm.
-- WebView2 runtime.
-- Wails v2 CLI 2.13.x.
+* Windows 10/11.
+* Go 1.25 or newer.
+* Node.js 20+ and npm.
+* WebView2 runtime.
+* Wails v2 CLI (2.13.x).
+* `golangci-lint` v2.
+
+### Install golangci-lint
+
+Install `golangci-lint` with Go:
+
+```bash
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+```
+
+Make sure your Go binary directory is available in your `PATH`.
 
 ### Run the frontend
 
@@ -92,18 +105,36 @@ wails build
 
 ## Formatting, linting, and checks
 
-Go formatting uses the standard `gofmt` tool. Frontend source is type-checked with TypeScript and formatted with Prettier. Repository CI runs the same checks automatically.
+Run the following commands from the repository root before submitting changes.
+
+### Go formatting
 
 ```bash
-# Go formatting check
-gofmt -l .
+golangci-lint fmt
+```
 
-# Frontend checks
+### Go linting
+
+```bash
+golangci-lint run
+```
+
+### Go tests
+
+```bash
+go test -v ./backend/... ./internal/...
+```
+
+### Frontend checks
+
+```bash
 cd frontend
 npm install
-npm run lint
 npm run format:check
+npm run lint
 ```
+
+Repository CI should run the same checks automatically.
 
 ## Configuration and providers
 
@@ -122,22 +153,22 @@ Configuration
 └── Max Tokens
 ```
 
-Providers are first-class objects. A provider can define its name, type, base URL, credential reference, credential environment variable, custom headers, and available models.
+Providers are first-class objects. A provider can define its name, type, base URL, credential reference, API key environment variable, custom headers, and available models.
 
 Configure providers from **Settings → Providers → Add provider**.
 
 Supported provider types are:
 
-- `openai_compatible`
-- `ollama`
+* `openai_compatible`
+* `ollama`
 
 ## Credentials
 
 eVoca does not store raw API keys in ordinary SQLite configuration data.
 
-On Windows, provider API keys are stored through **Windows Credential Manager** when a credential reference is configured. Environment variables can also be used through the provider's configured API-key environment variable.
+On Windows, provider API keys are stored through **Windows Credential Manager** when a credential reference is configured. Environment variables can also be used through the provider's configured API key environment variable.
 
-API keys are not included in settings backups; backups contain provider references and configuration data, not the secret value itself.
+API keys are not included in settings backups. Backups contain provider references and configuration data, but not the secret values themselves.
 
 Never commit API keys or other secrets to the repository.
 
@@ -145,53 +176,42 @@ Never commit API keys or other secrets to the repository.
 
 SQLite is used as the local source of truth for providers, configurations, executions, and application settings.
 
-Execution history can contain user input, generated output, system prompts, model/provider information, and captured image data. Data remains local unless a provider request is explicitly made by the user.
+Execution history can contain user input, generated output, system prompts, provider and model information, and captured image data. Data remains local unless the user explicitly runs a configuration or tests or discovers a provider.
 
-Full backups may contain the local SQLite database and history images. Settings-only backups contain configuration/provider data but do not contain API-key values.
+Full backups may contain the local SQLite database and history images. Settings-only backups contain configuration and provider data but do not contain API key values.
 
 ## Architecture
 
 ```text
 Windows
-  │
-  ├── Global Hotkey
-  │
-  ▼
+
+ │
+
+ ├── Global Hotkey
+
+ │
+
+ ▼
+
 Wails Window
-  │
-  ├── React / TypeScript UI
-  │
-  ▼
+
+ │
+
+ ├── React / TypeScript UI
+
+ │
+
+ ▼
+
 Go Application
-  ├── SQLite
-  ├── Hotkey manager
-  ├── Provider registry
-  ├── LLM clients
-  └── Credentials abstraction
+ ├── SQLite
+ ├── Hotkey manager
+ ├── Provider registry
+ ├── LLM clients
+ └── Credentials abstraction
 ```
 
 The frontend does not call LLM providers directly. Provider requests are handled by Go.
-
-## Project structure
-
-```text
-.
-├── backend/
-│   ├── credentials/
-│   ├── db/
-│   ├── hotkey/
-│   └── llm/
-├── frontend/
-│   └── src/
-├── app.go
-├── main.go
-├── screenshot.go
-├── tray.go
-├── go.mod
-└── wails.json
-```
-
-The root-level Go files intentionally remain in the main package because they are part of the Wails application entrypoint.
 
 ## Contributing
 
@@ -205,7 +225,7 @@ eVoca follows semantic versioning. The current baseline is **`v0.1.0`**.
 
 ## About the Name
 
-The name **eVoca** is derived from the Latin *evocare* (to call forth), chosen to describe the app's function of quickly calling up specific AI configurations.
+The name **eVoca** is derived from the Latin *evocare* ("to call forth"), chosen to describe the app's function of quickly calling up specific AI configurations.
 
 ## License
 

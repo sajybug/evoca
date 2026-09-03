@@ -17,12 +17,12 @@ func newTestDB(t *testing.T) *DB {
 	}
 	conn.SetMaxOpenConns(1)
 	if _, err := conn.Exec(`PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;`); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		t.Fatal(err)
 	}
 	db := &DB{conn: conn, imageDir: t.TempDir()}
 	if err := db.initializeSchema(); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })

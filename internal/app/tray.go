@@ -7,7 +7,6 @@ import (
 	"github.com/secoba/systray"
 )
 
-
 func (a *App) startTray() {
 	go systray.Run(func() {
 		systray.SetIcon(assets.EvocaIcon)

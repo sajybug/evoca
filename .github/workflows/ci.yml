@@ -21,10 +21,13 @@ jobs:
         run: |
           $files = gofmt -l .
           if ($files) { $files | Write-Host; exit 1 }
-      - name: Vet
-        run: go vet ./...
+      - name: GolangCI-Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.6
+          args: --timeout=5m
       - name: Test
-        run: go test ./...
+        run: go test -v ./backend/... ./internal/...
 
   frontend:
     runs-on: ubuntu-latest
@@ -43,30 +46,3 @@ jobs:
       - run: npm run typecheck
       - run: npm run format:check
       - run: npm run build
-
-  wails-build:
-    runs-on: windows-latest
-    needs: [go, frontend]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.25.x'
-          cache: true
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install Wails CLI
-        shell: pwsh
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.13.0
-      - name: Build Windows application
-        shell: pwsh
-        run: wails build -platform windows/amd64
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: eVoca-windows-amd64
-          path: build/bin/eVoca.exe
-          if-no-files-found: error

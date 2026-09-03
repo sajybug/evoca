@@ -11,7 +11,6 @@ import (
 
 var (
 	user32Focus             = syscall.NewLazyDLL("user32.dll")
-	findWindowWProc         = user32Focus.NewProc("FindWindowW")
 	getForegroundWindowProc = user32Focus.NewProc("GetForegroundWindow")
 	isWindowVisibleProc     = user32Focus.NewProc("IsWindowVisible")
 	setForegroundWindowProc = user32Focus.NewProc("SetForegroundWindow")
@@ -64,9 +63,9 @@ func RecoverWindowFocus() {
 		return
 	}
 
-	bringWindowToTopProc.Call(hwnd)
-	setForegroundWindowProc.Call(hwnd)
-	setActiveWindowProc.Call(hwnd)
+	_, _, _ = bringWindowToTopProc.Call(hwnd)
+	_, _, _ = setForegroundWindowProc.Call(hwnd)
+	_, _, _ = setActiveWindowProc.Call(hwnd)
 }
 
 // startWindowFocusWatcher keeps native focus in sync when the user switches

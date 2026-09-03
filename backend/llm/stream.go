@@ -39,7 +39,7 @@ func streamOllama(ctx context.Context, provider db.Provider, req Request, onChun
 	if err != nil {
 		return StreamResult{}, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return StreamResult{}, fmt.Errorf("ollama returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
@@ -153,7 +153,7 @@ func streamOpenAI(ctx context.Context, provider db.Provider, req Request, onChun
 	if err != nil {
 		return StreamResult{}, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return StreamResult{}, fmt.Errorf("provider returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))

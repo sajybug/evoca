@@ -4,6 +4,7 @@ package platform
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"image/png"
@@ -69,25 +70,25 @@ func CapturePrimaryScreen() ([]byte, error) {
 	if screen == 0 {
 		return nil, fmt.Errorf("GetDC failed: %w", err)
 	}
-	defer releaseDC.Call(0, screen)
+	defer func() { _, _, _ = releaseDC.Call(0, screen) }()
 
 	memDC, _, err := createCompatibleDC.Call(screen)
 	if memDC == 0 {
 		return nil, fmt.Errorf("CreateCompatibleDC failed: %w", err)
 	}
-	defer deleteDC.Call(memDC)
+	defer func() { _, _, _ = deleteDC.Call(memDC) }()
 
 	bitmap, _, err := createCompatibleBitmap.Call(screen, uintptr(width), uintptr(height))
 	if bitmap == 0 {
 		return nil, fmt.Errorf("CreateCompatibleBitmap failed: %w", err)
 	}
-	defer deleteObject.Call(bitmap)
+	defer func() { _, _, _ = deleteObject.Call(bitmap) }()
 
 	previous, _, err := selectObject.Call(memDC, bitmap)
 	if previous == 0 {
 		return nil, fmt.Errorf("SelectObject failed: %w", err)
 	}
-	defer selectObject.Call(memDC, previous)
+	defer func() { _, _, _ = selectObject.Call(memDC, previous) }()
 
 	if ok, _, err := bitBlt.Call(memDC, 0, 0, uintptr(width), uintptr(height), screen, 0, 0, srccopy); ok == 0 {
 		return nil, fmt.Errorf("BitBlt failed: %w", err)
@@ -122,7 +123,7 @@ func CapturePrimaryScreen() ([]byte, error) {
 func getMetric(index int) (int, uintptr, error) {
 	value, _, err := getSystemMetrics.Call(uintptr(index))
 	if value == 0 {
-		if err != nil && err != syscall.Errno(0) {
+		if err != nil && !errors.Is(err, syscall.Errno(0)) {
 			return 0, value, err
 		}
 		return 0, value, fmt.Errorf("GetSystemMetrics(%d) returned 0", index)

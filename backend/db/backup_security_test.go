@@ -20,16 +20,16 @@ func writeZip(t *testing.T, files map[string]string) string {
 	for name, body := range files {
 		w, err := zw.Create(name)
 		if err != nil {
-			f.Close()
+			_ = f.Close()
 			t.Fatal(err)
 		}
 		if _, err := w.Write([]byte(body)); err != nil {
-			f.Close()
+			_ = f.Close()
 			t.Fatal(err)
 		}
 	}
 	if err := zw.Close(); err != nil {
-		f.Close()
+		_ = f.Close()
 		t.Fatal(err)
 	}
 	if err := f.Close(); err != nil {

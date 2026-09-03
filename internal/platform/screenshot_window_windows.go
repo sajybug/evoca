@@ -3,6 +3,7 @@
 package platform
 
 import (
+	"errors"
 	"fmt"
 	"syscall"
 	"unsafe"
@@ -63,12 +64,12 @@ func HideScreenshotWindowForCapture() error {
 	}
 
 	// Keep the native hide as a first step, then cloak the compositor surface.
-	showWindow.Call(hwnd, uintptr(swHide))
+	_, _, _ = showWindow.Call(hwnd, uintptr(swHide))
 	if err := setScreenshotWindowCloaked(hwnd, true); err != nil {
 		return err
 	}
 
-	if _, _, err := dwmFlush.Call(); err != nil && err != syscall.Errno(0) {
+	if _, _, err := dwmFlush.Call(); err != nil && !errors.Is(err, syscall.Errno(0)) {
 		return fmt.Errorf("DwmFlush failed: %w", err)
 	}
 	return nil
@@ -107,7 +108,7 @@ func ShowScreenshotWindowNoActivate(width, height int) error {
 		return fmt.Errorf("SetWindowPos failed: %w", err)
 	}
 
-	showWindow.Call(hwnd, uintptr(swShowNoActivate))
+	_, _, _ = showWindow.Call(hwnd, uintptr(swShowNoActivate))
 	return nil
 }
 

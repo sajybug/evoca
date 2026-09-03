@@ -3,6 +3,7 @@
 package credentials
 
 import (
+	"errors"
 	"fmt"
 	"syscall"
 	"unsafe"
@@ -45,17 +46,21 @@ func (WindowsCredentialStore) Get(ref string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var ptr uintptr
+	var ptr unsafe.Pointer
 	ok, _, callErr := credReadProc.Call(uintptr(unsafe.Pointer(target)), credTypeGeneric, 0, uintptr(unsafe.Pointer(&ptr)))
 	if ok == 0 {
-		if errno, isErrno := callErr.(syscall.Errno); isErrno && errno == errorNotFound {
+		var errno syscall.Errno
+		if errors.As(callErr, &errno) && errno == errorNotFound {
 			return "", fmt.Errorf("credential not found")
 		}
 		return "", fmt.Errorf("CredReadW failed: %w", callErr)
 	}
-	defer credFreeProc.Call(ptr)
 
-	c := (*credential)(unsafe.Pointer(ptr))
+	defer func() {
+		_, _, _ = credFreeProc.Call(uintptr(ptr))
+	}()
+
+	c := (*credential)(ptr)
 	if c.CredentialBlobSize == 0 || c.CredentialBlob == nil {
 		return "", nil
 	}
@@ -94,7 +99,8 @@ func (WindowsCredentialStore) Delete(ref string) error {
 	}
 	ok, _, callErr := credDeleteProc.Call(uintptr(unsafe.Pointer(target)), credTypeGeneric, 0)
 	if ok == 0 {
-		if errno, isErrno := callErr.(syscall.Errno); isErrno && errno == errorNotFound {
+		var errno syscall.Errno
+		if errors.As(callErr, &errno) && errno == errorNotFound {
 			return nil
 		}
 		return fmt.Errorf("CredDeleteW failed: %w", callErr)

@@ -3,6 +3,7 @@
 package platform
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -29,14 +30,14 @@ func autostartExecutable() (string, error) {
 func IsAutostartEnabled() (bool, error) {
 	key, err := registry.OpenKey(registry.CURRENT_USER, autostartRegistryPath, registry.QUERY_VALUE)
 	if err != nil {
-		if err == registry.ErrNotExist {
+		if errors.Is(err, registry.ErrNotExist) {
 			return false, nil
 		}
 		return false, err
 	}
-	defer key.Close()
+	defer func() { _ = key.Close() }()
 	value, _, err := key.GetStringValue(autostartValueName)
-	if err == registry.ErrNotExist {
+	if errors.Is(err, registry.ErrNotExist) {
 		return false, nil
 	}
 	if err != nil {
@@ -50,11 +51,11 @@ func SetAutostartEnabled(enabled bool) error {
 	if err != nil {
 		return err
 	}
-	defer key.Close()
+	defer func() { _ = key.Close() }()
 
 	if !enabled {
 		err := key.DeleteValue(autostartValueName)
-		if err == registry.ErrNotExist {
+		if errors.Is(err, registry.ErrNotExist) {
 			return nil
 		}
 		return err

@@ -137,7 +137,7 @@ func (d *DB) ListExecutions(page, pageSize int, search, status, requestType, con
 	if err != nil {
 		return ExecutionPage{}, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]Execution, 0)
 	for rows.Next() {
 		var x Execution
@@ -189,7 +189,7 @@ func (d *DB) ClearExecutions() error {
 	for rows.Next() {
 		var imageData string
 		if err := rows.Scan(&imageData); err != nil {
-			rows.Close()
+			defer func() { _ = rows.Close() }()
 			return err
 		}
 		if strings.HasPrefix(imageData, "@file:") {
