@@ -8,11 +8,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import 'highlight.js/styles/github-dark.css';
 
-const RTL_RE = /[\u0590-\u08FF\uFB1D-\uFDFD\uFE70-\uFEFC]/;
-
-function directionFor(text: string): 'rtl' | 'ltr' {
-  return RTL_RE.test(text) ? 'rtl' : 'ltr';
-}
+import { directionFor } from './markdownUtils.js';
 
 function getTextContent(node: React.ReactNode): string {
   if (typeof node === 'string') {

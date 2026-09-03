@@ -2,6 +2,7 @@ package llm
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,7 +11,7 @@ import (
 
 type Ollama struct{ BaseURL string }
 
-func (p Ollama) Generate(req Request) (string, error) {
+func (p Ollama) Generate(ctx context.Context, req Request) (string, error) {
 	base := strings.TrimRight(p.BaseURL, "/")
 	if base == "" {
 		base = "http://localhost:11434"
@@ -21,7 +22,12 @@ func (p Ollama) Generate(req Request) (string, error) {
 	}
 	body := map[string]any{"model": req.Model, "stream": false, "messages": []map[string]any{{"role": "system", "content": req.Spell}, user}}
 	payload, _ := json.Marshal(body)
-	resp, err := http.Post(base+"/api/chat", "application/json", bytes.NewReader(payload))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/chat", bytes.NewReader(payload))
+	if err != nil {
+		return "", err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := providerHTTPClient.Do(httpReq)
 	if err != nil {
 		return "", err
 	}

@@ -65,7 +65,7 @@ func (d *DB) RecordExecutionStart(configurationID, model, requestType, input, sy
 		if err := os.WriteFile(imagePath, data, 0o644); err != nil {
 			return "", err
 		}
-		storedImage = "@file:" + imagePath
+		storedImage = "@file:" + filepath.Base(imagePath)
 	}
 	_, err := d.conn.Exec(`
 		INSERT INTO executions(id,configuration_id,model,input,output,status,created_at,duration_ms,
@@ -73,6 +73,26 @@ func (d *DB) RecordExecutionStart(configurationID, model, requestType, input, sy
 		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 	`, id, configurationID, model, input, "", "running", now, 0, requestType, systemPrompt, storedImage, nil, "", 0, 0, 0, 0, 0)
 	return id, err
+}
+
+func (d *DB) resolveExecutionImagePath(imageData string) string {
+	if !strings.HasPrefix(imageData, "@file:") {
+		return ""
+	}
+	ref := strings.TrimSpace(strings.TrimPrefix(imageData, "@file:"))
+	if ref == "" || d.imageDir == "" {
+		return ""
+	}
+	// New records store only the image filename, which makes backups portable.
+	// Older databases stored absolute paths; keep using them when the original
+	// file still exists, otherwise fall back to the same filename in the current
+	// configured image directory after a full backup restore.
+	if filepath.IsAbs(ref) {
+		if _, err := os.Stat(ref); err == nil {
+			return ref
+		}
+	}
+	return filepath.Join(d.imageDir, filepath.Base(ref))
 }
 
 func (d *DB) CompleteExecution(id, output, status, errorText string, metrics ExecutionMetrics) error {
@@ -147,7 +167,7 @@ func (d *DB) ListExecutions(page, pageSize int, search, status, requestType, con
 			return ExecutionPage{}, err
 		}
 		if strings.HasPrefix(x.ImageData, "@file:") {
-			if encoded, err := encodeImageFile(strings.TrimPrefix(x.ImageData, "@file:")); err == nil {
+			if encoded, err := encodeImageFile(d.resolveExecutionImagePath(x.ImageData)); err == nil {
 				x.ImageData = encoded
 			}
 		}
@@ -175,7 +195,7 @@ func (d *DB) DeleteExecution(id string) error {
 		return err
 	}
 	if strings.HasPrefix(imageData, "@file:") {
-		_ = os.Remove(strings.TrimPrefix(imageData, "@file:"))
+		_ = os.Remove(d.resolveExecutionImagePath(imageData))
 	}
 	return nil
 }
@@ -193,7 +213,7 @@ func (d *DB) ClearExecutions() error {
 			return err
 		}
 		if strings.HasPrefix(imageData, "@file:") {
-			imagePaths = append(imagePaths, strings.TrimPrefix(imageData, "@file:"))
+			imagePaths = append(imagePaths, d.resolveExecutionImagePath(imageData))
 		}
 	}
 	if err := rows.Close(); err != nil {
@@ -219,7 +239,7 @@ func (d *DB) GetExecution(id string) (Execution, error) {
 		&x.Input, &x.SystemPrompt, &x.ImageData, &x.Output, &x.Error, &x.Status, &x.CreatedAt, &x.CompletedAt, &x.DurationMs, &x.FirstTokenMs,
 		&x.InputTokens, &x.OutputTokens, &x.TotalTokens, &x.TokensPerSec)
 	if strings.HasPrefix(x.ImageData, "@file:") {
-		if encoded, readErr := encodeImageFile(strings.TrimPrefix(x.ImageData, "@file:")); readErr == nil {
+		if encoded, readErr := encodeImageFile(d.resolveExecutionImagePath(x.ImageData)); readErr == nil {
 			x.ImageData = encoded
 		}
 	}

@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -37,7 +38,7 @@ func TestOpenAICustomHeadersCannotOverrideCredential(t *testing.T) {
 		HeadersJSON:   `{"Authorization":"Bearer attacker-controlled"}`,
 	}
 	client := OpenAICompatible{Provider: provider, Credentials: testCredentialStore{value: "real-secret"}}
-	result, err := client.Generate(Request{Model: "model", Input: "hello", Spell: "system"})
+	result, err := client.Generate(context.Background(), Request{Model: "model", Input: "hello", Spell: "system"})
 	if err != nil {
 		t.Fatal(err)
 	}

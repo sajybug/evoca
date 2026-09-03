@@ -2,6 +2,7 @@ package llm
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -17,7 +18,7 @@ type OpenAICompatible struct {
 	Credentials credentials.CredentialStore
 }
 
-func (p OpenAICompatible) Generate(req Request) (string, error) {
+func (p OpenAICompatible) Generate(ctx context.Context, req Request) (string, error) {
 	envName := p.Provider.APIKeyEnv
 	if envName == "" {
 		keyRef := p.Provider.CredentialRef
@@ -63,7 +64,7 @@ func (p OpenAICompatible) Generate(req Request) (string, error) {
 		base = "https://api.openai.com/v1"
 	}
 
-	httpReq, err := http.NewRequest(http.MethodPost, base+"/chat/completions", bytes.NewReader(payload))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/chat/completions", bytes.NewReader(payload))
 	if err != nil {
 		return "", err
 	}

@@ -1,3 +1,4 @@
+import { sanitizeScreenshotPreview } from './markdownUtils.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Configuration, Provider } from '../../types/domain';
 import { useOverlayStore } from '../../stores/overlayStore';
@@ -476,9 +477,13 @@ export function Overlay({
         Math.round(window.innerWidth),
         Math.round(window.innerHeight),
       );
+      const safePreview = sanitizeScreenshotPreview(preview);
+      if (!safePreview) {
+        throw new Error('Screenshot preview returned an invalid image payload.');
+      }
 
       setScreenshotMode(false);
-      setScreenshotPreview(preview);
+      setScreenshotPreview(safePreview);
     } catch (error) {
       setScreenshotMode(false);
       setScreenshotImage(null);

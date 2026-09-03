@@ -832,7 +832,7 @@ func (a *App) InvokeConfiguration(id, input string) (string, error) {
 		return "", startErr
 	}
 	started := time.Now()
-	result, err := a.providers.Generate(provider, llm.Request{
+	result, err := a.providers.Generate(a.ctx, provider, llm.Request{
 		Model:       configuration.Model,
 		Spell:       configuration.Spell,
 		Input:       input,

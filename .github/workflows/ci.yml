@@ -22,9 +22,9 @@ jobs:
           $files = gofmt -l .
           if ($files) { $files | Write-Host; exit 1 }
       - name: GolangCI-Lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: v1.64.6
+          version: v2.11.4
           args: --timeout=5m
       - name: Test
         run: go test -v ./backend/... ./internal/...
@@ -42,7 +42,8 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
       - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
       - run: npm run build

@@ -430,6 +430,13 @@ Only record durable architectural/product changes here. Do not append repetitive
 - Kept `main.App` as a thin Wails binding facade over `internal/app.App`, so the frontend binding namespace remains stable while implementation stays inside the application layer.
 - Normalized platform-facing APIs so non-Windows builds have matching no-op/unsupported implementations, preparing the project for future macOS/Linux support.
 
+### Phase 21 — Release hardening: portable history images, provider context, frontend regression coverage
+
+- Updated CI to use the golangci-lint v2 configuration with the v2-compatible GitHub Action release.
+- Made History screenshot references portable by storing image filenames instead of absolute filesystem paths, while keeping backward compatibility for older absolute-path records restored onto a new storage location.
+- Added context-aware non-streaming provider requests so OpenAI-compatible and Ollama calls use the application context plus the existing bounded HTTP client timeout.
+- Added dependency-free frontend regression tests for RTL direction handling and screenshot preview payload sanitization, and wired them into frontend CI.
+
 ## Current Roadmap
 
 The completed phases are located here.
@@ -455,6 +462,7 @@ Phase 17 -> Configuration views, chat model override & focus recovery -> Done
 Phase 18 -> Scoped backup/restore, richer defaults & native focus recovery -> Done
 Phase 19 -> Open Source Release Preparation -> Done
 Phase 20 -> Go project structure & cross-platform boundaries -> Done
+Phase 21 -> Release hardening: portable history images, provider context, frontend regression coverage -> Done
 ```
 
 The exact next Phase may change; when it does, update the roadmap rather than keeping contradictory plans.

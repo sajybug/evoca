@@ -20,17 +20,17 @@ type Request struct {
 }
 
 type Provider interface {
-	Generate(request Request) (string, error)
+	Generate(ctx context.Context, request Request) (string, error)
 }
 type Registry struct{ Credentials credentials.CredentialStore }
 
 func NewRegistry() *Registry { return &Registry{Credentials: credentials.NewStore()} }
-func (r *Registry) Generate(provider db.Provider, request Request) (string, error) {
+func (r *Registry) Generate(ctx context.Context, provider db.Provider, request Request) (string, error) {
 	switch strings.ToLower(provider.Kind) {
 	case "openai_compatible":
-		return OpenAICompatible{Provider: provider, Credentials: r.Credentials}.Generate(request)
+		return OpenAICompatible{Provider: provider, Credentials: r.Credentials}.Generate(ctx, request)
 	case "ollama":
-		return Ollama{BaseURL: provider.BaseURL}.Generate(request)
+		return Ollama{BaseURL: provider.BaseURL}.Generate(ctx, request)
 	default:
 		return "", fmt.Errorf("unsupported provider type: %s", provider.Kind)
 	}
