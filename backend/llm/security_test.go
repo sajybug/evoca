@@ -32,10 +32,9 @@ func TestOpenAICustomHeadersCannotOverrideCredential(t *testing.T) {
 	defer srv.Close()
 
 	provider := db.Provider{
-		Kind:          "openai_compatible",
-		BaseURL:       srv.URL,
-		CredentialRef: "test-key",
-		HeadersJSON:   `{"Authorization":"Bearer attacker-controlled"}`,
+		Kind:        "openai_compatible",
+		BaseURL:     srv.URL,
+		HeadersJSON: `{"Authorization":"Bearer attacker-controlled"}`,
 	}
 	client := OpenAICompatible{Provider: provider, Credentials: testCredentialStore{value: "real-secret"}}
 	result, err := client.Generate(context.Background(), Request{Model: "model", Input: "hello", Spell: "system"})

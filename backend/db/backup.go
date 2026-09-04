@@ -484,9 +484,9 @@ func (d *DB) restorePayload(payload BackupPayload) error {
 			provider.HeadersJSON = "{}"
 		}
 		if _, err = tx.Exec(`
-			INSERT INTO providers(id,name,kind,base_url,credential_ref,api_key_env,headers_json,created_at)
-			VALUES(?,?,?,?,?,?,?,?)
-		`, provider.ID, provider.Name, provider.Kind, provider.BaseURL, provider.CredentialRef, provider.APIKeyEnv, provider.HeadersJSON, provider.CreatedAt); err != nil {
+			INSERT INTO providers(id,name,kind,base_url,headers_json,created_at)
+			VALUES(?,?,?,?,?,?)
+		`, provider.ID, provider.Name, provider.Kind, provider.BaseURL, provider.HeadersJSON, provider.CreatedAt); err != nil {
 			return fmt.Errorf("restore provider %q: %w", provider.ID, err)
 		}
 	}

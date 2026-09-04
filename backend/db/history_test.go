@@ -11,8 +11,8 @@ import (
 func TestExecutionLifecyclePersistsMetricsAndRemovesImage(t *testing.T) {
 	db := newTestDB(t)
 	if _, err := db.conn.Exec(`
-		INSERT INTO providers(id,name,kind,base_url,credential_ref,api_key_env,headers_json,created_at)
-		VALUES('p1','Test','openai_compatible','','','','{}',1);`); err != nil {
+		INSERT INTO providers(id,name,kind,base_url,headers_json,created_at)
+		VALUES('p1','Test','openai_compatible','','{}',1);`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.conn.Exec(`

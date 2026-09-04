@@ -161,7 +161,7 @@ The database is recreated from scratch when the schema changes; migrations are n
 
 Never store raw API keys in ordinary SQLite columns.
 
-The MVP may use environment variables as a temporary credential mechanism. Production should use Windows secure credential storage.
+Provider API keys are stored in Windows Credential Manager and are not persisted in SQLite or environment variables. The Credential Manager target is derived internally from the provider ID and is not part of the provider model.
 
 ## Future selection workflow
 
@@ -232,8 +232,6 @@ Provider
 ├── name
 ├── type
 ├── base URL
-├── credential reference
-├── credential environment variable
 ├── custom headers
 └── Models[]
 ```
@@ -437,6 +435,14 @@ Only record durable architectural/product changes here. Do not append repetitive
 - Added context-aware non-streaming provider requests so OpenAI-compatible and Ollama calls use the application context plus the existing bounded HTTP client timeout.
 - Added dependency-free frontend regression tests for RTL direction handling and screenshot preview payload sanitization, and wired them into frontend CI.
 
+### Phase 22 — About page, provider state synchronization & Credential Manager simplification
+
+- Added a frontend About page backed by application metadata from Go, including the current eVoca version and product purpose without duplicating the version in React UI code.
+- Fixed provider/configuration UI synchronization by propagating refreshed provider state from Settings to the root app, so newly created providers are immediately available to the main launcher instead of showing `No provider`.
+- Simplified credential handling around Windows Credential Manager: API-key environment variables and persisted credential-reference fields were removed. Credential Manager targets are derived internally from provider IDs and are not user-editable or stored in SQLite.
+- Removed the legacy provider credential columns/schema paths entirely; no migration is provided because old application data is intentionally disposable for this release.
+- Fixed the Settings credential-status effect dependency so ESLint no longer reports a missing `provider` dependency.
+
 ## Current Roadmap
 
 The completed phases are located here.
@@ -463,6 +469,7 @@ Phase 18 -> Scoped backup/restore, richer defaults & native focus recovery -> Do
 Phase 19 -> Open Source Release Preparation -> Done
 Phase 20 -> Go project structure & cross-platform boundaries -> Done
 Phase 21 -> Release hardening: portable history images, provider context, frontend regression coverage -> Done
+Phase 22 -> About page, provider state synchronization & Credential Manager simplification -> Done
 ```
 
 The exact next Phase may change; when it does, update the roadmap rather than keeping contradictory plans.

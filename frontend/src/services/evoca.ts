@@ -1,4 +1,5 @@
 import {
+  GetAppInfo,
   GetConfigurations,
   GetProviders,
   InvokeConfiguration,
@@ -52,9 +53,14 @@ import type {
   Execution,
   ExecutionPage,
   StorageSettings,
+  AppInfo,
 } from '../types/domain';
 
 export const evoca = {
+  getAppInfo(): Promise<AppInfo> {
+    return GetAppInfo();
+  },
+
   getConfigurations(): Promise<Configuration[]> {
     return GetConfigurations();
   },

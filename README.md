@@ -29,6 +29,7 @@ eVoca is intentionally focused. It is not a general-purpose chat client and does
 * Configurable system prompts, temperature, and max tokens.
 * Provider and model management.
 * OpenAI-compatible and Ollama providers.
+* Secure API-key storage through Windows Credential Manager.
 * Execution history stored locally in SQLite.
 * Screenshot capture and preview.
 * System-tray operation.
@@ -40,7 +41,7 @@ eVoca is a local-first desktop application. Provider requests are made only when
 
 Execution history can contain prompts, generated output, system prompts, provider and model information, and captured images. Treat full backups as sensitive files.
 
-API keys are not included in settings or full backups. On Windows, credential references are stored separately through Windows Credential Manager when configured.
+API keys are not stored in the SQLite database and are not included in backups. On Windows, provider API keys are stored separately in Windows Credential Manager.
 
 ## Releases
 
@@ -153,7 +154,7 @@ Configuration
 └── Max Tokens
 ```
 
-Providers are first-class objects. A provider can define its name, type, base URL, credential reference, API key environment variable, custom headers, and available models.
+Providers are first-class objects. A provider can define its name, type, base URL, custom headers, and available models. Authentication credentials are handled separately through Windows Credential Manager and are not stored as ordinary provider configuration data.
 
 Configure providers from **Settings → Providers → Add provider**.
 
@@ -164,11 +165,11 @@ Supported provider types are:
 
 ## Credentials
 
-eVoca does not store raw API keys in ordinary SQLite configuration data.
+For Windows installations, eVoca stores provider API keys in **Windows Credential Manager** rather than in SQLite or ordinary application configuration.
 
-On Windows, provider API keys are stored through **Windows Credential Manager** when a credential reference is configured. Environment variables can also be used through the provider's configured API key environment variable.
+The provider record does not contain an API-key environment-variable field or a user-editable credential reference. The application derives its internal credential target from the provider identity and retrieves the secret only when it is needed for a provider request.
 
-API keys are not included in settings backups. Backups contain provider references and configuration data, but not the secret values themselves.
+API keys are not included in settings or full backups. Backups can contain provider and configuration metadata, but not the secret values stored in Windows Credential Manager.
 
 Never commit API keys or other secrets to the repository.
 
@@ -178,7 +179,18 @@ SQLite is used as the local source of truth for providers, configurations, execu
 
 Execution history can contain user input, generated output, system prompts, provider and model information, and captured image data. Data remains local unless the user explicitly runs a configuration or tests or discovers a provider.
 
-Full backups may contain the local SQLite database and history images. Settings-only backups contain configuration and provider data but do not contain API key values.
+Full backups may contain the local SQLite database and history images. Settings-only backups contain configuration and provider metadata but do not contain API key values.
+
+### What is stored where?
+
+| Data | Storage |
+| --- | --- |
+| Provider and configuration settings | Local SQLite |
+| API keys | Windows Credential Manager |
+| Prompt/execution history | Local SQLite |
+| Generated output | Local SQLite |
+| Captured screenshots | Local application data / history storage |
+| Cloud account credentials | None |
 
 ## Architecture
 
@@ -186,21 +198,15 @@ Full backups may contain the local SQLite database and history images. Settings-
 Windows
 
  │
-
  ├── Global Hotkey
-
  │
-
  ▼
 
 Wails Window
 
  │
-
  ├── React / TypeScript UI
-
  │
-
  ▼
 
 Go Application
@@ -208,7 +214,7 @@ Go Application
  ├── Hotkey manager
  ├── Provider registry
  ├── LLM clients
- └── Credentials abstraction
+ └── Windows Credential Manager integration
 ```
 
 The frontend does not call LLM providers directly. Provider requests are handled by Go.

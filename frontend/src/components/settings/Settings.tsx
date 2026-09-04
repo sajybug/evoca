@@ -7,6 +7,8 @@ import { SearchableSelect } from '../common/SearchableSelect';
 interface Props {
   configurations: Configuration[];
   onChange: (configurations: Configuration[]) => void;
+  onProvidersChange: (providers: Provider[]) => void;
+  onOpenAbout: () => void;
   onClose: () => void;
 }
 
@@ -48,13 +50,17 @@ const freshProvider = (): Provider => ({
   name: 'New Provider',
   kind: 'openai_compatible',
   baseUrl: 'https://api.openai.com/v1',
-  credentialRef: `provider_${crypto.randomUUID()}`,
-  apiKeyEnv: '',
   headersJson: '{}',
   createdAt: 0,
 });
 
-export function Settings({ configurations, onChange, onClose }: Props) {
+export function Settings({
+  configurations,
+  onChange,
+  onProvidersChange,
+  onOpenAbout,
+  onClose,
+}: Props) {
   const [section, setSection] = useState<Section>('configurations');
   const [providers, setProviders] = useState<Provider[]>([]);
   const [configuration, setConfiguration] = useState<Configuration | null>(
@@ -163,25 +169,6 @@ export function Settings({ configurations, onChange, onClose }: Props) {
   }, [configuration?.providerId]);
 
   useEffect(() => {
-    const providerId = provider?.id;
-    const credentialRef = provider?.credentialRef;
-    if (!providerId || !credentialRef || !providers.some((item) => item.id === providerId)) return;
-
-    let active = true;
-    evoca
-      .hasProviderCredential(credentialRef)
-      .then((saved) => {
-        if (active) setCredentialSaved(saved);
-      })
-      .catch(() => {
-        if (active) setCredentialSaved(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [provider?.credentialRef, provider?.id, providers]);
-
-  useEffect(() => {
     // Do not hit the DB for a brand-new unsaved provider.
     const providerId = provider?.id;
     if (!providerId || !providers.some((item) => item.id === providerId)) return;
@@ -201,31 +188,39 @@ export function Settings({ configurations, onChange, onClose }: Props) {
     };
   }, [provider?.id, providers]);
 
-  function addProvider() {
-    const next = freshProvider();
-    setMessage('');
-    setProviderCredential('');
-    setCredentialSaved(false);
-    setProvider(next);
-    setModels([]);
-    setDiscoveredModels([]);
-    setModelName('');
-    setModelLabel('');
-    setSection('providers');
-  }
+  const credentialRef = provider?.id ? `provider_${provider.id}` : '';
+
+  useEffect(() => {
+    const providerId = provider?.id;
+    if (!providerId || !providers.some((item) => item.id === providerId)) return;
+
+    let active = true;
+    evoca
+      .hasProviderCredential(credentialRef)
+      .then((saved) => {
+        if (active) setCredentialSaved(saved);
+      })
+      .catch(() => {
+        if (active) setCredentialSaved(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [credentialRef, providers, provider?.id]);
 
   async function saveProviderCredential() {
-    if (!provider || !provider.credentialRef) {
-      setMessage('Credential reference is required.');
-      return;
-    }
+    if (!provider) return;
     if (!providerCredential) {
       setMessage('Enter an API key first.');
       return;
     }
+    if (!providers.some((item) => item.id === provider.id)) {
+      setMessage('Save the provider before storing its API key.');
+      return;
+    }
     setCredentialBusy(true);
     try {
-      await evoca.setProviderCredential(provider.credentialRef, providerCredential);
+      await evoca.setProviderCredential(credentialRef, providerCredential);
       setProviderCredential('');
       setCredentialSaved(true);
       setMessage('API key stored in Windows Credential Manager.');
@@ -237,10 +232,10 @@ export function Settings({ configurations, onChange, onClose }: Props) {
   }
 
   async function removeProviderCredential() {
-    if (!provider?.credentialRef) return;
+    if (!provider) return;
     setCredentialBusy(true);
     try {
-      await evoca.deleteProviderCredential(provider.credentialRef);
+      await evoca.deleteProviderCredential(credentialRef);
       setCredentialSaved(false);
       setProviderCredential('');
       setMessage('Stored API key removed.');
@@ -249,6 +244,17 @@ export function Settings({ configurations, onChange, onClose }: Props) {
     } finally {
       setCredentialBusy(false);
     }
+  }
+
+  function addProvider() {
+    const next = freshProvider();
+    setMessage('');
+    setProvider(next);
+    setModels([]);
+    setDiscoveredModels([]);
+    setModelName('');
+    setModelLabel('');
+    setSection('providers');
   }
 
   async function saveProvider() {
@@ -268,6 +274,7 @@ export function Settings({ configurations, onChange, onClose }: Props) {
       const saved = nextProviders.find((item) => item.id === provider.id) ?? provider;
 
       setProviders(nextProviders);
+      onProvidersChange(nextProviders);
       setProvider(saved);
       const savedModels = await evoca.getProviderModels(saved.id);
       setModels(Array.isArray(savedModels) ? savedModels : []);
@@ -316,6 +323,7 @@ export function Settings({ configurations, onChange, onClose }: Props) {
         await evoca.saveProvider(provider);
         const nextProviders = await evoca.getProviders();
         setProviders(nextProviders);
+        onProvidersChange(nextProviders);
         setProvider(nextProviders.find((item) => item.id === provider.id) ?? provider);
       }
       await evoca.saveProviderModel(model);
@@ -342,6 +350,7 @@ export function Settings({ configurations, onChange, onClose }: Props) {
       await evoca.deleteProvider(provider.id);
       const nextProviders = await evoca.getProviders();
       setProviders(nextProviders);
+      onProvidersChange(nextProviders);
       setProvider(nextProviders[0] ?? null);
       setModels(nextProviders[0] ? await evoca.getProviderModels(nextProviders[0].id) : []);
       onChange(await evoca.getConfigurations());
@@ -365,6 +374,8 @@ export function Settings({ configurations, onChange, onClose }: Props) {
         await evoca.saveProvider(provider);
         const nextProviders = await evoca.getProviders();
         setProviders(nextProviders);
+        onProvidersChange(nextProviders);
+        setProvider(nextProviders.find((item) => item.id === provider.id) ?? provider);
       }
 
       await evoca.saveProviderModel({
@@ -475,6 +486,13 @@ export function Settings({ configurations, onChange, onClose }: Props) {
             onClick={() => void evoca.quit()}
           >
             Exit eVoca
+          </button>
+          <button
+            type='button'
+            className='inline-flex items-center gap-1.5 rounded-[9px] border border-white/[.07] bg-white/[.03] px-2.5 py-1.5 text-[9px] font-semibold text-white/60 transition hover:bg-white/[.06] hover:text-white'
+            onClick={onOpenAbout}
+          >
+            About
           </button>
           <button
             type='button'
@@ -1042,8 +1060,6 @@ export function Settings({ configurations, onChange, onClose }: Props) {
                       : 'mb-1 w-full rounded-[11px] border border-transparent bg-transparent px-3 py-2.5 text-left transition hover:border-white/[.06] hover:bg-white/[.04]'
                   }
                   onClick={() => {
-                    setProviderCredential('');
-                    setCredentialSaved(false);
                     setModels([]);
                     setProvider(r);
                     setDiscoveredModels([]);
@@ -1124,36 +1140,14 @@ export function Settings({ configurations, onChange, onClose }: Props) {
                       onChange={(e) => setProvider({ ...provider, baseUrl: e.target.value })}
                     />
                   </label>
-                  <div className='grid grid-cols-2 gap-3'>
-                    <label className={settingsLabelClass}>
-                      Credential reference
-                      <input
-                        className='w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25'
-                        value={provider.credentialRef ?? ''}
-                        onChange={(e) => {
-                          setProviderCredential('');
-                          setCredentialSaved(false);
-                          setProvider({ ...provider, credentialRef: e.target.value });
-                        }}
-                      />
-                    </label>
-                    <label className={settingsLabelClass}>
-                      API key environment variable
-                      <input
-                        className='w-full rounded-[11px] border border-white/[.075] bg-white/[.025] px-3 py-2.5 text-[11px] text-white outline-none transition shadow-[inset_0_1px_0_rgba(255,255,255,.02)] focus:border-evoca-accent/35 focus:bg-white/[.045] focus:ring-2 focus:ring-evoca-accent/[.06] placeholder:text-white/25'
-                        value={provider.apiKeyEnv ?? ''}
-                        placeholder='Optional environment fallback'
-                        onChange={(e) => setProvider({ ...provider, apiKeyEnv: e.target.value })}
-                      />
-                    </label>
-                  </div>
                   <div className='mt-3 rounded-[12px] border border-evoca-accent/10 bg-evoca-accent/[.035] p-3'>
                     <div className='flex items-center justify-between gap-3'>
                       <div>
                         <div className={settingsSectionMetaClass}>Windows Credential Manager</div>
                         <p className='mt-1 text-[9px] leading-4 text-white/35'>
-                          API keys are stored outside SQLite and loaded only when a request needs
-                          them.
+                          API keys are stored only in Windows Credential Manager. eVoca manages the
+                          credential reference internally; no API-key environment variable is
+                          required.
                         </p>
                       </div>
                       <span
@@ -1165,7 +1159,7 @@ export function Settings({ configurations, onChange, onClose }: Props) {
                     <div className='mt-2 flex gap-2'>
                       <input
                         type='password'
-                        autoComplete='off'
+                        autoComplete='new-password'
                         className='min-w-0 flex-1 rounded-[10px] border border-white/[.075] bg-black/20 px-3 py-2 text-[10px] text-white outline-none placeholder:text-white/22 focus:border-evoca-accent/30'
                         placeholder={
                           credentialSaved
@@ -1178,7 +1172,11 @@ export function Settings({ configurations, onChange, onClose }: Props) {
                       <button
                         type='button'
                         className={settingsButtonClass}
-                        disabled={credentialBusy || !provider.credentialRef || !providerCredential}
+                        disabled={
+                          credentialBusy ||
+                          !providerCredential ||
+                          !providers.some((item) => item.id === provider.id)
+                        }
                         onClick={() => void saveProviderCredential()}
                       >
                         {credentialBusy ? 'Saving…' : 'Store key'}

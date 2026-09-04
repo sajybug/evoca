@@ -20,14 +20,12 @@ type Configuration struct {
 }
 
 type Provider struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	Kind          string `json:"kind"`
-	BaseURL       string `json:"baseUrl,omitempty"`
-	CredentialRef string `json:"credentialRef,omitempty"`
-	APIKeyEnv     string `json:"apiKeyEnv,omitempty"`
-	HeadersJSON   string `json:"headersJson,omitempty"`
-	CreatedAt     int64  `json:"createdAt"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Kind        string `json:"kind"`
+	BaseURL     string `json:"baseUrl,omitempty"`
+	HeadersJSON string `json:"headersJson,omitempty"`
+	CreatedAt   int64  `json:"createdAt"`
 }
 
 type ProviderModel struct {

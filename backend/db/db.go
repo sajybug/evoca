@@ -66,8 +66,6 @@ func (d *DB) initializeSchema() error {
 			name TEXT NOT NULL,
 			kind TEXT NOT NULL DEFAULT 'openai_compatible',
 			base_url TEXT,
-			credential_ref TEXT,
-			api_key_env TEXT,
 			headers_json TEXT,
 			created_at INTEGER NOT NULL
 		);
@@ -133,11 +131,6 @@ func (d *DB) initializeSchema() error {
 		return err
 	}
 
-	// Keep an existing local database compatible with the current schema.
-	// This only repairs missing columns; application data is left untouched.
-	if err := d.ensureColumn("providers", "api_key_env", "TEXT"); err != nil {
-		return err
-	}
 	if err := d.ensureColumn("providers", "headers_json", "TEXT"); err != nil {
 		return err
 	}
@@ -191,12 +184,12 @@ func (d *DB) initializeSchema() error {
 		if providerCount == 0 {
 			if _, err := d.conn.Exec(`
 				INSERT INTO providers
-				  (id,name,kind,base_url,credential_ref,api_key_env,headers_json,created_at)
+				  (id,name,kind,base_url,headers_json,created_at)
 				VALUES
 				  ('openai','OpenAI','openai_compatible','https://api.openai.com/v1',
-				   'openai_api_key','EVOCA_OPENAI_API_KEY','{}',?),
+				   '{}',?),
 				  ('ollama','Ollama','ollama','http://localhost:11434',
-				   '','','{}',?)
+				   '{}',?)
 			`, now, now); err != nil {
 				return err
 			}
@@ -237,10 +230,10 @@ func (d *DB) initializeSchema() error {
 	// which could leave the starter configurations pointing at a missing provider/model.
 	if _, err := d.conn.Exec(`
 		INSERT OR IGNORE INTO providers
-		  (id,name,kind,base_url,credential_ref,api_key_env,headers_json,created_at)
+		  (id,name,kind,base_url,headers_json,created_at)
 		VALUES
 		  ('openai','OpenAI','openai_compatible','https://api.openai.com/v1',
-		   'openai_api_key','EVOCA_OPENAI_API_KEY','{}',?)
+		   '{}',?)
 	`, now); err != nil {
 		return err
 	}
@@ -470,8 +463,6 @@ func (d *DB) ListProviders() ([]Provider, error) {
 	rows, err := d.conn.Query(`
 		SELECT id,name,kind,
 		       COALESCE(base_url, ''),
-		       COALESCE(credential_ref, ''),
-		       COALESCE(api_key_env, ''),
 		       COALESCE(headers_json, '{}'),
 		       created_at
 		FROM providers ORDER BY name
@@ -484,7 +475,7 @@ func (d *DB) ListProviders() ([]Provider, error) {
 	var out []Provider
 	for rows.Next() {
 		var r Provider
-		if err := rows.Scan(&r.ID, &r.Name, &r.Kind, &r.BaseURL, &r.CredentialRef, &r.APIKeyEnv, &r.HeadersJSON, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &r.Kind, &r.BaseURL, &r.HeadersJSON, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -497,12 +488,10 @@ func (d *DB) GetProvider(id string) (Provider, error) {
 	err := d.conn.QueryRow(`
 		SELECT id,name,kind,
 		       COALESCE(base_url, ''),
-		       COALESCE(credential_ref, ''),
-		       COALESCE(api_key_env, ''),
 		       COALESCE(headers_json, '{}'),
 		       created_at
 		FROM providers WHERE id=?
-	`, id).Scan(&r.ID, &r.Name, &r.Kind, &r.BaseURL, &r.CredentialRef, &r.APIKeyEnv, &r.HeadersJSON, &r.CreatedAt)
+	`, id).Scan(&r.ID, &r.Name, &r.Kind, &r.BaseURL, &r.HeadersJSON, &r.CreatedAt)
 	return r, err
 }
 
@@ -518,8 +507,6 @@ func (d *DB) SaveProvider(r Provider) error {
 	}
 	r.Name = strings.TrimSpace(r.Name)
 	r.BaseURL = strings.TrimSpace(r.BaseURL)
-	r.CredentialRef = strings.TrimSpace(r.CredentialRef)
-	r.APIKeyEnv = strings.TrimSpace(r.APIKeyEnv)
 	r.HeadersJSON = strings.TrimSpace(r.HeadersJSON)
 	if r.HeadersJSON == "" {
 		r.HeadersJSON = "{}"
@@ -535,19 +522,16 @@ func (d *DB) SaveProvider(r Provider) error {
 
 	_, err := d.conn.Exec(`
 		INSERT INTO providers(
-			id,name,kind,base_url,credential_ref,api_key_env,headers_json,created_at
+			id,name,kind,base_url,headers_json,created_at
 		)
-		VALUES(?,?,?,?,?,?,?,?)
+		VALUES(?,?,?,?,?,?)
 		ON CONFLICT(id) DO UPDATE SET
 			name=excluded.name,
 			kind=excluded.kind,
 			base_url=excluded.base_url,
-			credential_ref=excluded.credential_ref,
-			api_key_env=excluded.api_key_env,
 			headers_json=excluded.headers_json
 	`,
-		r.ID, r.Name, r.Kind, r.BaseURL, r.CredentialRef,
-		r.APIKeyEnv, r.HeadersJSON, r.CreatedAt,
+		r.ID, r.Name, r.Kind, r.BaseURL, r.HeadersJSON, r.CreatedAt,
 	)
 	return err
 }

@@ -429,6 +429,10 @@ func (a *App) Restart() {
 	}(a.ctx)
 }
 
+func (a *App) GetAppInfo() AppInfo {
+	return GetAppInfo()
+}
+
 func (a *App) GetConfigurations() ([]db.Configuration, error) {
 	if a.database == nil {
 		return nil, fmt.Errorf("database is not initialized")
@@ -547,8 +551,8 @@ func (a *App) DeleteProvider(id string) error {
 	if err := a.database.DeleteProvider(id); err != nil {
 		return err
 	}
-	if a.credentialStore != nil && strings.TrimSpace(provider.CredentialRef) != "" {
-		_ = a.credentialStore.Delete(provider.CredentialRef)
+	if a.credentialStore != nil {
+		_ = a.credentialStore.Delete(credentials.RefForProvider(provider.ID))
 	}
 	return nil
 }

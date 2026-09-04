@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -42,17 +41,9 @@ func providerHeaders(provider db.Provider, store credentials.CredentialStore) (m
 			return nil, fmt.Errorf("invalid custom headers JSON: %w", err)
 		}
 	}
-	envName := provider.APIKeyEnv
-	if envName == "" {
-		keyRef := provider.CredentialRef
-		if keyRef == "" {
-			keyRef = "openai_api_key"
-		}
-		envName = "EVOCA_" + strings.ToUpper(keyRef)
-	}
-	key := os.Getenv(envName)
-	if key == "" && store != nil && provider.CredentialRef != "" {
-		if stored, err := store.Get(provider.CredentialRef); err == nil {
+	key := ""
+	if store != nil {
+		if stored, err := store.Get(credentials.RefForProvider(provider.ID)); err == nil {
 			key = stored
 		}
 	}

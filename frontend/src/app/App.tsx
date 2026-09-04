@@ -5,6 +5,7 @@ import { evoca } from '../services/evoca';
 import { Overlay } from '../components/overlay/Overlay';
 import { Settings } from '../components/settings/Settings';
 import { HistoryPanel } from '../components/history/HistoryPanel';
+import { About } from '../components/about/About';
 import type { Configuration, Provider } from '../types/domain';
 
 export default function App() {
@@ -12,6 +13,7 @@ export default function App() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const open = useOverlayStore((s) => s.open);
 
   useEffect(() => {
@@ -27,6 +29,7 @@ export default function App() {
     const cancel = EventsOn('evoca:overlay', () => {
       setShowSettings(false);
       setShowHistory(false);
+      setShowAbout(false);
       open();
     });
     const restored = EventsOn('evoca:data:restored', async () => {
@@ -66,7 +69,9 @@ export default function App() {
       tabIndex={-1}
       className='h-full w-full outline-none bg-[radial-gradient(circle_at_14%_-5%,rgba(216,184,110,.07),transparent_30%),radial-gradient(circle_at_100%_100%,rgba(96,106,140,.05),transparent_34%),linear-gradient(180deg,#090b0f,#08090c_60%,#07080a)]'
     >
-      {showHistory ? (
+      {showAbout ? (
+        <About onClose={() => setShowAbout(false)} />
+      ) : showHistory ? (
         <HistoryPanel
           configurations={configurations}
           onClose={() => setShowHistory(false)}
@@ -82,6 +87,11 @@ export default function App() {
         <Settings
           configurations={configurations}
           onChange={setConfigurations}
+          onProvidersChange={setProviders}
+          onOpenAbout={() => {
+            setShowSettings(false);
+            setShowAbout(true);
+          }}
           onClose={() => setShowSettings(false)}
         />
       ) : (

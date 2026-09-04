@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/sajybug/evoca/backend/credentials"
@@ -19,18 +18,9 @@ type OpenAICompatible struct {
 }
 
 func (p OpenAICompatible) Generate(ctx context.Context, req Request) (string, error) {
-	envName := p.Provider.APIKeyEnv
-	if envName == "" {
-		keyRef := p.Provider.CredentialRef
-		if keyRef == "" {
-			keyRef = "openai_api_key"
-		}
-		envName = "EVOCA_" + strings.ToUpper(keyRef)
-	}
-
-	apiKey := os.Getenv(envName)
-	if apiKey == "" && p.Credentials != nil && p.Provider.CredentialRef != "" {
-		if stored, err := p.Credentials.Get(p.Provider.CredentialRef); err == nil {
+	apiKey := ""
+	if p.Credentials != nil {
+		if stored, err := p.Credentials.Get(credentials.RefForProvider(p.Provider.ID)); err == nil {
 			apiKey = stored
 		}
 	}

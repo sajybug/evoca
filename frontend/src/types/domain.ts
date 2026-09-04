@@ -22,10 +22,14 @@ export interface Provider {
   name: string;
   kind: string;
   baseUrl?: string;
-  credentialRef?: string;
-  apiKeyEnv?: string;
   headersJson?: string;
   createdAt: number;
+}
+
+export interface AppInfo {
+  name: string;
+  version: string;
+  purpose: string;
 }
 
 export interface ProviderModel {

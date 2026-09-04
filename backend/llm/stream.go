@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -98,14 +97,6 @@ func streamOllama(ctx context.Context, provider db.Provider, req Request, onChun
 
 func streamOpenAI(ctx context.Context, provider db.Provider, req Request, onChunk ChunkFunc, store credentials.CredentialStore) (StreamResult, error) {
 	started := time.Now()
-	envName := provider.APIKeyEnv
-	if envName == "" {
-		ref := provider.CredentialRef
-		if ref == "" {
-			ref = "openai_api_key"
-		}
-		envName = "EVOCA_" + strings.ToUpper(ref)
-	}
 	var userContent any = req.Input
 	if req.ImageBase64 != "" {
 		userContent = []map[string]any{{"type": "text", "text": req.Input}, {"type": "image_url", "image_url": map[string]string{"url": "data:image/png;base64," + req.ImageBase64}}}
@@ -126,9 +117,9 @@ func streamOpenAI(ctx context.Context, provider db.Provider, req Request, onChun
 	if err != nil {
 		return StreamResult{}, err
 	}
-	apiKey := os.Getenv(envName)
-	if apiKey == "" && store != nil && provider.CredentialRef != "" {
-		if stored, err := store.Get(provider.CredentialRef); err == nil {
+	apiKey := ""
+	if store != nil {
+		if stored, err := store.Get(credentials.RefForProvider(provider.ID)); err == nil {
 			apiKey = stored
 		}
 	}

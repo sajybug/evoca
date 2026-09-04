@@ -54,12 +54,10 @@ func TestExtractZipSafelyRejectsTraversal(t *testing.T) {
 func TestSettingsBackupDoesNotContainRawCredentials(t *testing.T) {
 	payload := BackupPayload{
 		Providers: []Provider{{
-			ID:            "p1",
-			Name:          "Provider",
-			Kind:          "openai_compatible",
-			CredentialRef: "openai_api_key",
-			APIKeyEnv:     "EVOCA_OPENAI_API_KEY",
-			HeadersJSON:   `{"X-Test":"value"}`,
+			ID:          "p1",
+			Name:        "Provider",
+			Kind:        "openai_compatible",
+			HeadersJSON: `{"X-Test":"value"}`,
 		}},
 	}
 	data, err := json.Marshal(payload)
@@ -68,9 +66,6 @@ func TestSettingsBackupDoesNotContainRawCredentials(t *testing.T) {
 	}
 	if strings.Contains(string(data), "sk-secret") || strings.Contains(string(data), "api-secret") {
 		t.Fatal("raw credential leaked into backup payload")
-	}
-	if !strings.Contains(string(data), "openai_api_key") {
-		t.Fatal("credential reference missing from payload")
 	}
 }
 
