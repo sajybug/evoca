@@ -58,7 +58,7 @@ Cross-platform support is not currently a project goal.
 ### Prerequisites
 
 * Windows 10/11.
-* Go 1.25 or newer.
+* Go 1.27 or newer.
 * Node.js 20+ and npm.
 * WebView2 runtime.
 * Wails v2 CLI (2.13.x).

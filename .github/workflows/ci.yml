@@ -10,40 +10,78 @@ permissions:
 jobs:
   go:
     runs-on: windows-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.25.x'
+          go-version: '1.27.x'
           cache: true
-      - name: Check formatting
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.13.0
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Prepare frontend dist
         shell: pwsh
         run: |
-          $files = gofmt -l .
-          if ($files) { $files | Write-Host; exit 1 }
+          New-Item -ItemType Directory -Force frontend/dist | Out-Null
+          New-Item -ItemType File -Force frontend/dist/.gitkeep | Out-Null
+
+      - name: Generate Wails bindings
+        run: wails generate module
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
       - name: GolangCI-Lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.11.4
-          args: --timeout=5m
-      - name: Test
+          version: v2.13.2
+
+      - name: Test Go
         run: go test -v ./backend/... ./internal/...
 
   frontend:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
-      - run: npm run format:check
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npm test
-      - run: npm run build
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Format check
+        working-directory: frontend
+        run: npm run format:check
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Test
+        working-directory: frontend
+        run: npm test

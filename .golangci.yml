@@ -2,14 +2,10 @@ version: "2"
 
 run:
   timeout: 5m
-  exclusions:
-    paths:
-      - frontend
-      - build/bin
-      - node_modules
 
 linters:
   default: none
+
   enable:
     - errcheck
     - govet
@@ -20,3 +16,8 @@ linters:
     - forcetypeassert
     - nilerr
 
+  exclusions:
+    paths:
+      - frontend
+      - build/bin
+      - node_modules

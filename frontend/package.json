@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
-    "test": "node --test \"src/**/*.test.mjs\""
+    "test": "node --test"
   },
   "dependencies": {
     "katex": "^0.18.4",
