@@ -1,6 +1,14 @@
 # eVoca
 
-**eVoca is a Windows-first launcher for reusable AI configurations.**
+<p align="center">
+  <img
+    src="https://github.com/user-attachments/assets/24cc87bd-f311-4ff9-89a6-72e0b9684ff6"
+    alt="eVoca Demo"
+    width="800"
+  />
+</p>
+
+**A reusable AI configuration launcher for Windows.**
 
 Press a global hotkey, pick a configuration, enter your prompt, and get the result without leaving the application you are working in.
 
