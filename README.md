@@ -8,6 +8,17 @@
   />
 </p>
 
+<div align="center">
+
+[![CI](https://github.com/sajybug/evoca/actions/workflows/ci.yml/badge.svg)](https://github.com/sajybug/evoca/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/github/v/release/sajybug/evoca?style=flat-square)](https://github.com/sajybug/evoca/releases)
+[![Downloads](https://img.shields.io/github/downloads/sajybug/evoca/total?style=flat-square)](https://github.com/sajybug/evoca/releases)
+[![Contributors](https://img.shields.io/github/contributors/sajybug/evoca?style=flat-square)](https://github.com/sajybug/evoca/graphs/contributors)
+[![License](https://img.shields.io/github/license/sajybug/evoca?style=flat-square)](https://github.com/sajybug/evoca/blob/main/LICENSE)
+[![Last Commit](https://img.shields.io/github/last-commit/sajybug/evoca?style=flat-square)](https://github.com/sajybug/evoca/commits/main)
+
+</div>
+
 **A reusable AI configuration launcher for Windows.**
 
 Press a global hotkey, pick a configuration, enter your prompt, and get the result without leaving the application you are working in.
