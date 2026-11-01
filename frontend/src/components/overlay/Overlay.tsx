@@ -194,88 +194,91 @@ export function Overlay({
     return options;
   }, [providerModels, selected]);
 
-  const listenToStream = useCallback((requestId: string) => {
-    const offChunk = EventsOn('evoca:llm:chunk', (event: { id: string; chunk: string }) => {
-      if (event?.id === requestId) {
-        useOverlayStore.getState().appendOutput(event.chunk || '');
+  const listenToStream = useCallback(
+    (requestId: string) => {
+      const offChunk = EventsOn('evoca:llm:chunk', (event: { id: string; chunk: string }) => {
+        if (event?.id === requestId) {
+          useOverlayStore.getState().appendOutput(event.chunk || '');
 
-        useOverlayStore.getState().setState('loading');
-      }
-    });
+          useOverlayStore.getState().setState('loading');
+        }
+      });
 
-    const offDone = EventsOn('evoca:llm:done', (event: { id: string; output: string }) => {
-      if (event?.id === requestId) {
-        activeRequestId.current = null;
-        setStreaming(false);
-        setLoadingStartedAt(null);
-        notifyMiniResult(requestId, true);
+      const offDone = EventsOn('evoca:llm:done', (event: { id: string; output: string }) => {
+        if (event?.id === requestId) {
+          activeRequestId.current = null;
+          setStreaming(false);
+          setLoadingStartedAt(null);
+          notifyMiniResult(requestId, true);
 
-        useOverlayStore.getState().setOutput(event.output || useOverlayStore.getState().output);
+          useOverlayStore.getState().setOutput(event.output || useOverlayStore.getState().output);
 
+          offChunk();
+          offDone();
+          offError();
+          offCancelled();
+
+          if (streamCleanup.current) {
+            streamCleanup.current = null;
+          }
+        }
+      });
+
+      const offError = EventsOn('evoca:llm:error', (event: { id: string; error: string }) => {
+        if (event?.id === requestId) {
+          activeRequestId.current = null;
+          setStreaming(false);
+          setLoadingStartedAt(null);
+          notifyMiniResult(requestId, false);
+
+          useOverlayStore.getState().setError(event.error || 'LLM request failed');
+
+          offChunk();
+          offDone();
+          offError();
+          offCancelled();
+
+          if (streamCleanup.current) {
+            streamCleanup.current = null;
+          }
+        }
+      });
+
+      const offCancelled = EventsOn('evoca:llm:cancelled', (event: { id: string }) => {
+        if (event?.id === requestId) {
+          activeRequestId.current = null;
+          setStreaming(false);
+          setLoadingStartedAt(null);
+          if (miniModeRef.current) setMiniStatus('cancelled');
+
+          useOverlayStore.getState().setOutput('');
+
+          useOverlayStore.getState().setState('input');
+
+          offChunk();
+          offDone();
+          offError();
+          offCancelled();
+
+          if (streamCleanup.current) {
+            streamCleanup.current = null;
+          }
+        }
+      });
+
+      const cleanup = () => {
         offChunk();
         offDone();
         offError();
         offCancelled();
+      };
 
-        if (streamCleanup.current) {
-          streamCleanup.current = null;
-        }
-      }
-    });
+      streamCleanup.current = cleanup;
 
-    const offError = EventsOn('evoca:llm:error', (event: { id: string; error: string }) => {
-      if (event?.id === requestId) {
-        activeRequestId.current = null;
-        setStreaming(false);
-        setLoadingStartedAt(null);
-        notifyMiniResult(requestId, false);
-
-        useOverlayStore.getState().setError(event.error || 'LLM request failed');
-
-        offChunk();
-        offDone();
-        offError();
-        offCancelled();
-
-        if (streamCleanup.current) {
-          streamCleanup.current = null;
-        }
-      }
-    });
-
-    const offCancelled = EventsOn('evoca:llm:cancelled', (event: { id: string }) => {
-      if (event?.id === requestId) {
-        activeRequestId.current = null;
-        setStreaming(false);
-        setLoadingStartedAt(null);
-        if (miniModeRef.current) setMiniStatus('cancelled');
-
-        useOverlayStore.getState().setOutput('');
-
-        useOverlayStore.getState().setState('input');
-
-        offChunk();
-        offDone();
-        offError();
-        offCancelled();
-
-        if (streamCleanup.current) {
-          streamCleanup.current = null;
-        }
-      }
-    });
-
-    const cleanup = () => {
-      offChunk();
-      offDone();
-      offError();
-      offCancelled();
-    };
-
-    streamCleanup.current = cleanup;
-
-    return cleanup;
-  }, [notifyMiniResult]);
+      return cleanup;
+    },
+    [notifyMiniResult],
+  );
 
   const runAgain = useCallback(
     async (executionId: string) => {
