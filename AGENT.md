@@ -443,6 +443,12 @@ Only record durable architectural/product changes here. Do not append repetitive
 - Removed the legacy provider credential columns/schema paths entirely; no migration is provided because old application data is intentionally disposable for this release.
 - Fixed the Settings credential-status effect dependency so ESLint no longer reports a missing `provider` dependency.
 
+### Phase 23 — Screenshot model selection & floating processing indicator
+
+- Fixed screenshot requests to use the model selected in the launcher, matching the text-generation model override; persisted the selected model in execution history so replay uses the original model.
+- Added a compact, always-on-top processing indicator for minimized/background processing, with running/completed/error/cancelled states and restoration by clicking the indicator.
+- Kept the processing indicator visually compact: the circular button is 56×56 px, shifted 16 px left within its mini window, with proportionally adjusted label and activity-dot offsets. Adjust this JSX positioning separately from the native window's screen position.
+
 ## Current Roadmap
 
 The completed phases are located here.
@@ -470,6 +476,7 @@ Phase 19 -> Open Source Release Preparation -> Done
 Phase 20 -> Go project structure & cross-platform boundaries -> Done
 Phase 21 -> Release hardening: portable history images, provider context, frontend regression coverage -> Done
 Phase 22 -> About page, provider state synchronization & Credential Manager simplification -> Done
+Phase 23 -> Screenshot model selection & floating processing indicator -> Done
 ```
 
 The exact next Phase may change; when it does, update the roadmap rather than keeping contradictory plans.

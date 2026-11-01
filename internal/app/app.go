@@ -21,17 +21,20 @@ import (
 )
 
 type App struct {
-	ctx             context.Context
-	database        *db.DB
-	providers       *llm.Registry
-	hotkey          *hotkey.Manager
-	overlayVisible  bool
-	streamMu        sync.Mutex
-	streamWG        sync.WaitGroup
-	streams         map[string]context.CancelFunc
-	screenshotMu    sync.Mutex
-	screenshotPNG   []byte
-	credentialStore credentials.CredentialStore
+	ctx                    context.Context
+	database               *db.DB
+	providers              *llm.Registry
+	hotkey                 *hotkey.Manager
+	overlayVisible         bool
+	streamMu               sync.Mutex
+	streamWG               sync.WaitGroup
+	streams                map[string]context.CancelFunc
+	processingFocusMu      sync.Mutex
+	restoreProcessingFocus func()
+	processingMiniMode     bool
+	screenshotMu           sync.Mutex
+	screenshotPNG          []byte
+	credentialStore        credentials.CredentialStore
 }
 
 func NewApp() *App {
@@ -70,6 +73,12 @@ func (a *App) DomReady(ctx context.Context) {
 }
 
 func (a *App) Shutdown(ctx context.Context) {
+	a.processingFocusMu.Lock()
+	if a.restoreProcessingFocus != nil {
+		a.restoreProcessingFocus()
+		a.restoreProcessingFocus = nil
+	}
+	a.processingFocusMu.Unlock()
 	a.streamMu.Lock()
 	for _, cancel := range a.streams {
 		cancel()
@@ -88,6 +97,15 @@ func (a *App) Shutdown(ctx context.Context) {
 
 func (a *App) ToggleOverlay() {
 	if a.ctx == nil {
+		return
+	}
+
+	a.processingFocusMu.Lock()
+	miniMode := a.processingMiniMode
+	a.processingFocusMu.Unlock()
+	if miniMode {
+		_ = a.RestoreProcessingWindow()
+		a.overlayVisible = true
 		return
 	}
 
@@ -189,6 +207,73 @@ func (a *App) HideOverlay() {
 		a.overlayVisible = false
 		runtime.WindowHide(a.ctx)
 	}
+}
+
+// ShowProcessingIndicator shrinks eVoca to a small, always-on-top indicator
+// without taking focus away from the application the user switched to.
+func (a *App) ShowProcessingIndicator(screenWidth, screenHeight int) error {
+	if a.ctx == nil {
+		return fmt.Errorf("app is not initialized")
+	}
+
+	a.processingFocusMu.Lock()
+	if a.restoreProcessingFocus == nil {
+		a.restoreProcessingFocus = platform.SuppressWindowFocusRecovery()
+	}
+	a.processingFocusMu.Unlock()
+
+	runtime.WindowSetMinSize(a.ctx, 0, 0)
+	runtime.WindowSetSize(a.ctx, 76, 76)
+	x := screenWidth - 94
+	y := screenHeight - 186
+	if x < 0 {
+		x = 0
+	}
+	if y < 0 {
+		y = 0
+	}
+	runtime.WindowSetPosition(a.ctx, x, y)
+	if err := platform.ShowProcessingIndicatorNoActivate(); err != nil {
+		a.processingFocusMu.Lock()
+		if a.restoreProcessingFocus != nil {
+			a.restoreProcessingFocus()
+			a.restoreProcessingFocus = nil
+		}
+		a.processingFocusMu.Unlock()
+		runtime.WindowSetMinSize(a.ctx, 950, 600)
+		runtime.WindowSetSize(a.ctx, 950, 600)
+		runtime.WindowCenter(a.ctx)
+		return err
+	}
+	runtime.WindowSetAlwaysOnTop(a.ctx, true)
+	a.processingFocusMu.Lock()
+	a.processingMiniMode = true
+	a.processingFocusMu.Unlock()
+	runtime.EventsEmit(a.ctx, "evoca:processing:mini", map[string]any{"active": true})
+	return nil
+}
+
+// RestoreProcessingWindow returns the floating indicator to the normal overlay.
+func (a *App) RestoreProcessingWindow() error {
+	if a.ctx == nil {
+		return fmt.Errorf("app is not initialized")
+	}
+
+	a.processingFocusMu.Lock()
+	if a.restoreProcessingFocus != nil {
+		a.restoreProcessingFocus()
+		a.restoreProcessingFocus = nil
+	}
+	a.processingMiniMode = false
+	a.processingFocusMu.Unlock()
+
+	runtime.WindowSetMinSize(a.ctx, 950, 600)
+	runtime.WindowSetSize(a.ctx, 950, 600)
+	runtime.WindowCenter(a.ctx)
+	runtime.WindowSetAlwaysOnTop(a.ctx, true)
+	runtime.WindowShow(a.ctx)
+	runtime.EventsEmit(a.ctx, "evoca:processing:mini", map[string]any{"active": false})
+	return nil
 }
 
 func (a *App) GetHotkey() string {
@@ -699,7 +784,7 @@ func (a *App) startConfigurationStream(id, input, requestID, modelOverride strin
 	return nil
 }
 
-func (a *App) StartScreenshotStream(id, input, requestID string, x, y, width, height, viewportWidth, viewportHeight int) error {
+func (a *App) StartScreenshotStream(id, input, requestID, modelOverride string, x, y, width, height, viewportWidth, viewportHeight int) error {
 	if a.database == nil {
 		return fmt.Errorf("database is not initialized")
 	}
@@ -710,6 +795,13 @@ func (a *App) StartScreenshotStream(id, input, requestID string, x, y, width, he
 	provider, err := a.database.GetProvider(configuration.ProviderID)
 	if err != nil {
 		return err
+	}
+	model := strings.TrimSpace(modelOverride)
+	if model == "" {
+		model = strings.TrimSpace(configuration.Model)
+	}
+	if model == "" {
+		return fmt.Errorf("model is required")
 	}
 	a.screenshotMu.Lock()
 	pngData := append([]byte(nil), a.screenshotPNG...)
@@ -730,16 +822,16 @@ func (a *App) StartScreenshotStream(id, input, requestID string, x, y, width, he
 	if err := a.database.MarkConfigurationUsed(id); err != nil {
 		return err
 	}
-	executionID, err := a.database.RecordExecutionStart(id, configuration.Model, "screenshot", input, configuration.Spell, imageBase64)
+	executionID, err := a.database.RecordExecutionStart(id, model, "screenshot", input, configuration.Spell, imageBase64)
 	if err != nil {
 		return err
 	}
-	runtime.EventsEmit(a.ctx, "evoca:llm:start", map[string]any{"id": requestID, "executionId": executionID})
+	runtime.EventsEmit(a.ctx, "evoca:llm:start", map[string]any{"id": requestID, "executionId": executionID, "model": model})
 	requestCtx, cancel := a.registerStream(requestID)
 	go func() {
 		defer cancel()
 		defer a.unregisterStream(requestID)
-		result, err := a.providers.GenerateStream(requestCtx, provider, llm.Request{Model: configuration.Model, Spell: configuration.Spell, Input: input, ImageBase64: imageBase64, Temperature: configuration.Temperature, MaxTokens: configuration.MaxTokens, OutputType: configuration.OutputType}, func(chunk string) error {
+		result, err := a.providers.GenerateStream(requestCtx, provider, llm.Request{Model: model, Spell: configuration.Spell, Input: input, ImageBase64: imageBase64, Temperature: configuration.Temperature, MaxTokens: configuration.MaxTokens, OutputType: configuration.OutputType}, func(chunk string) error {
 			runtime.EventsEmit(a.ctx, "evoca:llm:chunk", map[string]any{"id": requestID, "chunk": chunk})
 			return nil
 		})
@@ -755,7 +847,7 @@ func (a *App) StartScreenshotStream(id, input, requestID string, x, y, width, he
 		}
 		metrics := db.ExecutionMetrics{DurationMs: result.Metrics.DurationMs, FirstTokenMs: result.Metrics.FirstTokenMs, InputTokens: result.Metrics.InputTokens, OutputTokens: result.Metrics.OutputTokens, TotalTokens: result.Metrics.TotalTokens, TokensPerSec: result.Metrics.TokensPerSec}
 		_ = a.database.CompleteExecution(executionID, result.Text, "success", "", metrics)
-		runtime.EventsEmit(a.ctx, "evoca:llm:done", map[string]any{"id": requestID, "executionId": executionID, "output": result.Text, "metrics": result.Metrics})
+		runtime.EventsEmit(a.ctx, "evoca:llm:done", map[string]any{"id": requestID, "executionId": executionID, "output": result.Text, "metrics": result.Metrics, "model": model})
 	}()
 	return nil
 }
@@ -776,6 +868,13 @@ func (a *App) StartExecutionStream(executionID, requestID string) error {
 	if err != nil {
 		return err
 	}
+	model := strings.TrimSpace(execution.Model)
+	if model == "" {
+		model = strings.TrimSpace(configuration.Model)
+	}
+	if model == "" {
+		return fmt.Errorf("model is required")
+	}
 	if err := a.database.MarkConfigurationUsed(configuration.ID); err != nil {
 		return err
 	}
@@ -786,16 +885,16 @@ func (a *App) StartExecutionStream(executionID, requestID string) error {
 			return fmt.Errorf("the original screenshot is no longer available")
 		}
 	}
-	newExecutionID, err := a.database.RecordExecutionStart(configuration.ID, configuration.Model, execution.RequestType, execution.Input, configuration.Spell, imageBase64)
+	newExecutionID, err := a.database.RecordExecutionStart(configuration.ID, model, execution.RequestType, execution.Input, configuration.Spell, imageBase64)
 	if err != nil {
 		return err
 	}
-	runtime.EventsEmit(a.ctx, "evoca:llm:start", map[string]any{"id": requestID, "executionId": newExecutionID})
+	runtime.EventsEmit(a.ctx, "evoca:llm:start", map[string]any{"id": requestID, "executionId": newExecutionID, "model": model})
 	requestCtx, cancel := a.registerStream(requestID)
 	go func() {
 		defer cancel()
 		defer a.unregisterStream(requestID)
-		result, err := a.providers.GenerateStream(requestCtx, provider, llm.Request{Model: configuration.Model, Spell: configuration.Spell, Input: execution.Input, ImageBase64: imageBase64, Temperature: configuration.Temperature, MaxTokens: configuration.MaxTokens, OutputType: configuration.OutputType}, func(chunk string) error {
+		result, err := a.providers.GenerateStream(requestCtx, provider, llm.Request{Model: model, Spell: configuration.Spell, Input: execution.Input, ImageBase64: imageBase64, Temperature: configuration.Temperature, MaxTokens: configuration.MaxTokens, OutputType: configuration.OutputType}, func(chunk string) error {
 			runtime.EventsEmit(a.ctx, "evoca:llm:chunk", map[string]any{"id": requestID, "chunk": chunk})
 			return nil
 		})
@@ -811,7 +910,7 @@ func (a *App) StartExecutionStream(executionID, requestID string) error {
 		}
 		metrics := db.ExecutionMetrics{DurationMs: result.Metrics.DurationMs, FirstTokenMs: result.Metrics.FirstTokenMs, InputTokens: result.Metrics.InputTokens, OutputTokens: result.Metrics.OutputTokens, TotalTokens: result.Metrics.TotalTokens, TokensPerSec: result.Metrics.TokensPerSec}
 		_ = a.database.CompleteExecution(newExecutionID, result.Text, "success", "", metrics)
-		runtime.EventsEmit(a.ctx, "evoca:llm:done", map[string]any{"id": requestID, "executionId": newExecutionID, "output": result.Text, "metrics": result.Metrics})
+		runtime.EventsEmit(a.ctx, "evoca:llm:done", map[string]any{"id": requestID, "executionId": newExecutionID, "output": result.Text, "metrics": result.Metrics, "model": model})
 	}()
 	return nil
 }

@@ -87,6 +87,47 @@ func UncloakScreenshotWindow() error {
 	return nil
 }
 
+// ShowProcessingIndicatorNoActivate places eVoca near the lower-right edge
+// of the primary display as a small topmost window without stealing focus.
+func ShowProcessingIndicatorNoActivate() error {
+	hwnd := findEvocaWindow()
+	if hwnd == 0 {
+		return fmt.Errorf("eVoca window handle not found")
+	}
+	width := 76
+	height := 76
+	screenWidth, _, err := getMetric(smCxScreen)
+	if err != nil {
+		return err
+	}
+	screenHeight, _, err := getMetric(smCyScreen)
+	if err != nil {
+		return err
+	}
+	x := screenWidth - width - 18
+	y := screenHeight - height - 110
+	if x < 0 {
+		x = 0
+	}
+	if y < 0 {
+		y = 0
+	}
+	const hwndTopmost = ^uintptr(0)
+	if ok, _, callErr := setWindowPos.Call(
+		hwnd,
+		hwndTopmost,
+		uintptr(x),
+		uintptr(y),
+		uintptr(width),
+		uintptr(height),
+		uintptr(swpNoActivate|swpShowWindow),
+	); ok == 0 {
+		return fmt.Errorf("SetWindowPos processing indicator failed: %w", callErr)
+	}
+	_, _, _ = showWindow.Call(hwnd, uintptr(swShowNoActivate))
+	return nil
+}
+
 // showScreenshotWindowNoActivate reveals and resizes the Wails window without
 // foreground activation. This prevents Windows from flashing/bouncing the
 // taskbar button during screenshot capture.

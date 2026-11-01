@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Configuration, Provider } from '../../types/domain';
 import { useOverlayStore } from '../../stores/overlayStore';
 import { evoca } from '../../services/evoca';
-import { EventsOn, ClipboardGetText } from '../../wailsjs/runtime/runtime';
+import { ClipboardGetText, EventsOn, SendNotification } from '../../wailsjs/runtime/runtime';
 import { Markdown } from './Markdown';
 import { SearchableSelect } from '../common/SearchableSelect';
 
@@ -18,16 +18,23 @@ export function Overlay({
   onOpenSettings,
   onOpenHistory,
   providers,
+  onProcessingMiniModeChange,
 }: {
   configurations: Configuration[];
   onOpenSettings: () => void;
   onOpenHistory: () => void;
   providers: Provider[];
+  onProcessingMiniModeChange: (active: boolean) => void;
 }) {
   const state = useOverlayStore();
 
   const [query, setQuery] = useState('');
   const [streaming, setStreaming] = useState(false);
+  const [miniMode, setMiniMode] = useState(false);
+  const [miniStatus, setMiniStatus] = useState<'running' | 'done' | 'error' | 'cancelled'>(
+    'running',
+  );
+  const miniModeRef = useRef(false);
   const [loadingStartedAt, setLoadingStartedAt] = useState<number | null>(null);
   const [loadingElapsedMs, setLoadingElapsedMs] = useState(0);
   const [screenshotMode, setScreenshotMode] = useState(false);
@@ -38,7 +45,57 @@ export function Overlay({
   const streamCleanup = useRef<(() => void) | null>(null);
   const activeRequestId = useRef<string | null>(null);
 
+  // Keep ref cleanup behind a function so TypeScript does not incorrectly
+  // narrow `streamCleanup.current` to `null` across the async request flow.
+  function cleanupActiveStream() {
+    const cleanup = streamCleanup.current;
+    streamCleanup.current = null;
+    if (typeof cleanup === 'function') cleanup();
+  }
+
   const [hotkey, setHotkey] = useState('Ctrl+Space');
+
+  const enterProcessingMiniMode = useCallback(() => {
+    if (miniModeRef.current) return;
+
+    miniModeRef.current = true;
+    setMiniMode(true);
+    setMiniStatus('running');
+    onProcessingMiniModeChange(true);
+
+    void evoca
+      .showProcessingIndicator(window.screen.availWidth, window.screen.availHeight)
+      .catch((error) => {
+        miniModeRef.current = false;
+        setMiniMode(false);
+        onProcessingMiniModeChange(false);
+        useOverlayStore.getState().setError(`Could not minimize eVoca: ${String(error)}`);
+      });
+  }, [onProcessingMiniModeChange]);
+
+  const restoreProcessingWindow = useCallback(async () => {
+    try {
+      await evoca.restoreProcessingWindow();
+      miniModeRef.current = false;
+      setMiniMode(false);
+      onProcessingMiniModeChange(false);
+    } catch (error) {
+      useOverlayStore.getState().setError(`Could not restore eVoca: ${String(error)}`);
+    }
+  }, [onProcessingMiniModeChange]);
+
+  const notifyMiniResult = useCallback((requestId: string, success: boolean) => {
+    if (!miniModeRef.current) return;
+
+    setMiniStatus(success ? 'done' : 'error');
+    void SendNotification({
+      id: `evoca-${requestId}-${success ? 'done' : 'error'}`,
+      title: success ? 'eVoca · Completed' : 'eVoca · Error',
+      body: success
+        ? 'Your result is ready. Click the eVoca indicator to view it.'
+        : 'The request could not be completed. Click the eVoca indicator to view the error.',
+    }).catch(() => undefined);
+  }, []);
 
   const [configurationView, setConfigurationView] = useState<'grid' | 'list'>(() => {
     try {
@@ -151,6 +208,7 @@ export function Overlay({
         activeRequestId.current = null;
         setStreaming(false);
         setLoadingStartedAt(null);
+        notifyMiniResult(requestId, true);
 
         useOverlayStore.getState().setOutput(event.output || useOverlayStore.getState().output);
 
@@ -170,6 +228,7 @@ export function Overlay({
         activeRequestId.current = null;
         setStreaming(false);
         setLoadingStartedAt(null);
+        notifyMiniResult(requestId, false);
 
         useOverlayStore.getState().setError(event.error || 'LLM request failed');
 
@@ -189,6 +248,7 @@ export function Overlay({
         activeRequestId.current = null;
         setStreaming(false);
         setLoadingStartedAt(null);
+        if (miniModeRef.current) setMiniStatus('cancelled');
 
         useOverlayStore.getState().setOutput('');
 
@@ -215,10 +275,11 @@ export function Overlay({
     streamCleanup.current = cleanup;
 
     return cleanup;
-  }, []);
+  }, [notifyMiniResult]);
 
   const runAgain = useCallback(
     async (executionId: string) => {
+      let requestId = '';
       try {
         const execution = await evoca.getExecution(executionId);
 
@@ -242,6 +303,7 @@ export function Overlay({
         streamCleanup.current = null;
 
         setLoadingElapsedMs(0);
+        setMiniStatus('running');
         setStreaming(true);
         setLoadingStartedAt(Date.now());
 
@@ -249,7 +311,7 @@ export function Overlay({
 
         useOverlayStore.getState().setState('loading');
 
-        const requestId = crypto.randomUUID();
+        requestId = crypto.randomUUID();
 
         activeRequestId.current = requestId;
 
@@ -258,14 +320,27 @@ export function Overlay({
         await evoca.startExecutionStream(execution.id, requestId);
       } catch (error) {
         activeRequestId.current = null;
+        streamCleanup.current?.();
+        streamCleanup.current = null;
         setStreaming(false);
         setLoadingStartedAt(null);
+        if (requestId) notifyMiniResult(requestId, false);
 
         useOverlayStore.getState().setError(String(error));
       }
     },
-    [configurations, selectConfiguration, listenToStream],
+    [configurations, selectConfiguration, listenToStream, notifyMiniResult],
   );
+
+  useEffect(() => {
+    const off = EventsOn('evoca:processing:mini', (event: { active?: boolean }) => {
+      const active = Boolean(event?.active);
+      miniModeRef.current = active;
+      setMiniMode(active);
+      onProcessingMiniModeChange(active);
+    });
+    return () => off();
+  }, [onProcessingMiniModeChange]);
 
   useEffect(() => {
     const off = EventsOn('evoca:run-again', (event: { executionId?: string }) => {
@@ -283,6 +358,23 @@ export function Overlay({
       .then((value) => setHotkey(value || 'Ctrl+Space'))
       .catch(() => setHotkey('Ctrl+Space'));
   }, []);
+
+  useEffect(() => {
+    if (!streaming) return;
+
+    const onBlur = () => enterProcessingMiniMode();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') enterProcessingMiniMode();
+    };
+
+    window.addEventListener('blur', onBlur);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      window.removeEventListener('blur', onBlur);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [streaming, enterProcessingMiniMode]);
 
   useEffect(() => {
     if (!loadingStartedAt || !streaming) return;
@@ -332,6 +424,7 @@ export function Overlay({
     streamCleanup.current = null;
 
     setLoadingElapsedMs(0);
+    setMiniStatus('running');
     setStreaming(true);
     setLoadingStartedAt(Date.now());
 
@@ -352,8 +445,11 @@ export function Overlay({
         chatModel || selected.model,
       );
     } catch (error) {
+      activeRequestId.current = null;
+      cleanupActiveStream();
       setStreaming(false);
       setLoadingStartedAt(null);
+      notifyMiniResult(requestId, false);
       state.setError(String(error));
     }
   }
@@ -510,6 +606,7 @@ export function Overlay({
     streamCleanup.current?.();
     streamCleanup.current = null;
 
+    setMiniStatus('running');
     setStreaming(true);
     setLoadingStartedAt(Date.now());
 
@@ -527,6 +624,7 @@ export function Overlay({
         selected.id,
         state.input,
         requestId,
+        chatModel || selected.model,
         Math.round(shot.x),
         Math.round(shot.y),
         Math.round(shot.width),
@@ -535,8 +633,11 @@ export function Overlay({
         Math.round(window.innerHeight),
       );
     } catch (error) {
+      activeRequestId.current = null;
+      cleanupActiveStream();
       setStreaming(false);
       setLoadingStartedAt(null);
+      notifyMiniResult(requestId, false);
       state.setError(String(error));
     }
   }
@@ -547,6 +648,55 @@ export function Overlay({
     setSelection(null);
 
     void evoca.cancelScreenshot();
+  }
+
+  if (miniMode) {
+    const indicatorTitle =
+      miniStatus === 'running'
+        ? 'eVoca is processing. Click to open.'
+        : miniStatus === 'done'
+          ? 'Processing completed. Click to view the result.'
+          : miniStatus === 'error'
+            ? 'Processing failed. Click to view the error.'
+            : 'Processing cancelled. Click to return to eVoca.';
+
+    return (
+      <div className='grid h-full w-full place-items-center overflow-hidden bg-transparent'>
+        <button
+          type='button'
+          aria-label={indicatorTitle}
+          title={indicatorTitle}
+          onClick={() => void restoreProcessingWindow()}
+          className='group relative grid h-[56px] w-[56px] -translate-x-4 place-items-center rounded-full border border-evoca-accent/35 bg-[#0b0e12]/95 text-white shadow-[0_8px_30px_rgba(0,0,0,.5),0_0_24px_rgba(216,184,110,.13)] outline-none transition hover:scale-[1.04] hover:border-evoca-accent/70'
+        >
+          <span
+            className={`absolute inset-[-4px] rounded-full border-2 ${
+              miniStatus === 'running'
+                ? 'animate-spin border-evoca-accent/75 border-t-transparent'
+                : miniStatus === 'done'
+                  ? 'border-emerald-400/80'
+                  : miniStatus === 'error'
+                    ? 'border-red-400/80'
+                    : 'border-white/30'
+            }`}
+          />
+
+          <span className='text-[16px] font-bold tracking-[-.08em] text-evoca-accent'>
+            {miniStatus === 'running'
+              ? 'e'
+              : miniStatus === 'done'
+                ? '✓'
+                : miniStatus === 'error'
+                  ? '!'
+                  : '–'}
+          </span>
+
+          {miniStatus === 'running' && (
+            <span className='absolute bottom-[7px] right-[7px] h-2 w-2 rounded-full bg-evoca-accent shadow-[0_0_10px_rgba(216,184,110,.8)] animate-pulse' />
+          )}
+        </button>
+      </div>
+    );
   }
 
   if (screenshotMode) {
@@ -947,6 +1097,15 @@ export function Overlay({
               </div>
             </div>
           </div>
+          <button
+            type='button'
+            title='Minimize to floating activity indicator'
+            aria-label='Minimize to floating activity indicator'
+            className='grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/[.08] bg-white/[.035] text-[15px] text-white/60 transition hover:border-evoca-accent/35 hover:text-evoca-accent'
+            onClick={enterProcessingMiniMode}
+          >
+            −
+          </button>
         </div>
 
         <div className='min-h-0 flex-1 px-5 py-4 pb-16'>

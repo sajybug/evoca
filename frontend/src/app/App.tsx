@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { EventsEmit, EventsOn } from '../wailsjs/runtime/runtime';
+import { EventsEmit, EventsOn, InitializeNotifications } from '../wailsjs/runtime/runtime';
 import { useOverlayStore } from '../stores/overlayStore';
 import { evoca } from '../services/evoca';
 import { Overlay } from '../components/overlay/Overlay';
@@ -8,12 +8,15 @@ import { HistoryPanel } from '../components/history/HistoryPanel';
 import { About } from '../components/about/About';
 import type { Configuration, Provider } from '../types/domain';
 
+let notificationInitialization: Promise<void> | null = null;
+
 export default function App() {
   const [configurations, setConfigurations] = useState<Configuration[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [processingMiniMode, setProcessingMiniMode] = useState(false);
   const open = useOverlayStore((s) => s.open);
 
   useEffect(() => {
@@ -52,6 +55,14 @@ export default function App() {
   }, [open]);
 
   useEffect(() => {
+    if (!notificationInitialization) {
+      notificationInitialization = InitializeNotifications().catch(() => {
+        notificationInitialization = null;
+      });
+    }
+  }, []);
+
+  useEffect(() => {
     const restoreWebViewFocus = () => {
       window.requestAnimationFrame(() =>
         document.querySelector<HTMLElement>('[data-evoca-root]')?.focus(),
@@ -68,6 +79,7 @@ export default function App() {
       data-evoca-root
       tabIndex={-1}
       className='h-full w-full outline-none bg-[radial-gradient(circle_at_14%_-5%,rgba(216,184,110,.07),transparent_30%),radial-gradient(circle_at_100%_100%,rgba(96,106,140,.05),transparent_34%),linear-gradient(180deg,#090b0f,#08090c_60%,#07080a)]'
+      style={processingMiniMode ? { background: 'transparent' } : undefined}
     >
       {showAbout ? (
         <About onClose={() => setShowAbout(false)} />
@@ -100,6 +112,7 @@ export default function App() {
           onOpenSettings={() => setShowSettings(true)}
           onOpenHistory={() => setShowHistory(true)}
           providers={providers}
+          onProcessingMiniModeChange={setProcessingMiniMode}
         />
       )}
     </div>

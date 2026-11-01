@@ -12,3 +12,7 @@ func UncloakScreenshotWindow() error        { return nil }
 func ShowScreenshotWindowNoActivate(width, height int) error { return nil }
 func GetEvocaWindowRect() (screenshotWindowRect, error)      { return screenshotWindowRect{}, nil }
 func RestoreEvocaWindowRect(rect screenshotWindowRect) error { return nil }
+
+// ShowProcessingIndicatorNoActivate is a no-op on platforms without the
+// Windows native window helper. The app layer applies the runtime fallback.
+func ShowProcessingIndicatorNoActivate() error { return nil }

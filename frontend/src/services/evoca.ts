@@ -42,6 +42,8 @@ import {
   PreviewScreenshot,
   CancelScreenshot,
   StartScreenshotStream,
+  ShowProcessingIndicator,
+  RestoreProcessingWindow,
   ListExecutions,
   GetExecution,
 } from '../wailsjs/go/main/App';
@@ -185,6 +187,7 @@ export const evoca = {
     id: string,
     input: string,
     requestId: string,
+    model: string,
     x: number,
     y: number,
     width: number,
@@ -196,6 +199,7 @@ export const evoca = {
       id,
       input,
       requestId,
+      model,
       x,
       y,
       width,
@@ -203,6 +207,14 @@ export const evoca = {
       viewportWidth,
       viewportHeight,
     );
+  },
+
+  showProcessingIndicator(screenWidth: number, screenHeight: number): Promise<void> {
+    return ShowProcessingIndicator(screenWidth, screenHeight);
+  },
+
+  restoreProcessingWindow(): Promise<void> {
+    return RestoreProcessingWindow();
   },
 
   listExecutions(
